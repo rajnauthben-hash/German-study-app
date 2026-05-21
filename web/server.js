@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,7 +13,6 @@ const DATA_FILE = path.join(__dirname, 'data', 'sets.json');
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure data file exists
 async function ensureDataFile() {
   try {
     await fs.access(DATA_FILE);
@@ -31,9 +30,9 @@ async function writeSets(sets) {
   await fs.writeFile(DATA_FILE, JSON.stringify(sets, null, 2));
 }
 
-// ─── Gemini API ───────────────────────────────────────────────────────────────
+// ─── Groq API ─────────────────────────────────────────────────────────────────
 
-const CLAUDE_PROMPT = (text) => `You are a German language teacher assistant.
+const STUDY_PROMPT = (text) => `You are a German language teacher assistant.
 Analyze this German worksheet text and create a detailed study set.
 
 Return ONLY valid JSON — no markdown, no explanation, just the JSON object.
@@ -86,9 +85,45 @@ Required structure:
 Worksheet text:
 ${text}`;
 
+function groqRequest(apiKey, prompt) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 4096,
+      temperature: 0.3,
+    });
+
+    const req = https.request({
+      hostname: 'api.groq.com',
+      path: '/openai/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error('Invalid JSON response from Groq'));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 
-// Generate a study set from pasted text using Gemini
+// Generate a study set from pasted text using Groq
 app.post('/api/generate', async (req, res) => {
   const { text } = req.body;
 
@@ -96,20 +131,22 @@ app.post('/api/generate', async (req, res) => {
     return res.status(400).json({ error: 'No text provided.' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey === 'your_groq_api_key_here') {
     return res.status(503).json({
-      error: 'GEMINI_API_KEY not set. Copy .env.example to .env and add your free key from aistudio.google.com',
+      error: 'GROQ_API_KEY not set. Copy .env.example to .env and add your free key from console.groq.com',
       demo: true,
     });
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const response = await groqRequest(apiKey, STUDY_PROMPT(text));
 
-    const result = await model.generateContent(CLAUDE_PROMPT(text));
-    const responseText = result.response.text().trim();
+    if (response.error) {
+      throw new Error(response.error.message || 'Groq API error');
+    }
+
+    const responseText = response.choices[0].message.content.trim();
 
     // Strip markdown code fences if present
     const jsonText = responseText.replace(/^```json?\s*/i, '').replace(/\s*```$/, '');
@@ -125,9 +162,9 @@ app.post('/api/generate', async (req, res) => {
 
     res.json(studySet);
   } catch (err) {
-    console.error('Gemini API error:', err.message);
+    console.error('Groq API error:', err.message);
     if (err.message?.includes('JSON')) {
-      res.status(500).json({ error: 'Claude returned unexpected output. Try again.' });
+      res.status(500).json({ error: 'AI returned unexpected output. Try again.' });
     } else {
       res.status(500).json({ error: err.message || 'Generation failed.' });
     }
@@ -195,9 +232,9 @@ ensureDataFile().then(() => {
   app.listen(PORT, () => {
     console.log(`\n🇩🇪  DeutschSnap Study is running!`);
     console.log(`   Open: http://localhost:${PORT}\n`);
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
-      console.log(`⚠️  No API key found. Copy .env.example to .env and add your free Gemini key.`);
-      console.log(`   Get one free at: https://aistudio.google.com\n`);
+    if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_groq_api_key_here') {
+      console.log(`⚠️  No API key found. Copy .env.example to .env and add your free Groq key.`);
+      console.log(`   Get one free at: https://console.groq.com\n`);
     }
   });
 });
