@@ -30,7 +30,7 @@ async function writeSets(sets) {
   await fs.writeFile(DATA_FILE, JSON.stringify(sets, null, 2));
 }
 
-// ─── OpenRouter API ───────────────────────────────────────────────────────────
+// ─── Groq API ─────────────────────────────────────────────────────────────────
 
 const STUDY_PROMPT = (text) => `You are a German language teacher assistant.
 Analyze this German worksheet text and create a detailed study set.
@@ -85,23 +85,22 @@ Required structure:
 Worksheet text:
 ${text}`;
 
-function openRouterRequest(apiKey, prompt) {
+function groqRequest(apiKey, prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: 'meta-llama/llama-3.3-70b-instruct:free',
+      model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 4096,
+      temperature: 0.3,
     });
 
     const req = https.request({
-      hostname: 'openrouter.ai',
-      path: '/api/v1/chat/completions',
+      hostname: 'api.groq.com',
+      path: '/openai/v1/chat/completions',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'DeutschSnap Study',
         'Content-Length': Buffer.byteLength(body),
       },
     }, (res) => {
@@ -111,7 +110,7 @@ function openRouterRequest(apiKey, prompt) {
         try {
           resolve(JSON.parse(data));
         } catch (e) {
-          reject(new Error('Invalid response from OpenRouter'));
+          reject(new Error('Invalid response from Groq'));
         }
       });
     });
@@ -132,19 +131,19 @@ app.post('/api/generate', async (req, res) => {
     return res.status(400).json({ error: 'No text provided.' });
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey === 'your_groq_api_key_here') {
     return res.status(503).json({
-      error: 'OPENROUTER_API_KEY not set. Get a free key at openrouter.ai — no credit card needed.',
+      error: 'GROQ_API_KEY not set. Get a free key at console.groq.com — no credit card needed.',
       demo: true,
     });
   }
 
   try {
-    const response = await openRouterRequest(apiKey, STUDY_PROMPT(text));
+    const response = await groqRequest(apiKey, STUDY_PROMPT(text));
 
     if (response.error) {
-      throw new Error(response.error.message || 'OpenRouter API error');
+      throw new Error(response.error.message || 'Groq API error');
     }
 
     const responseText = response.choices[0].message.content.trim();
@@ -163,7 +162,7 @@ app.post('/api/generate', async (req, res) => {
 
     res.json(studySet);
   } catch (err) {
-    console.error('OpenRouter API error:', err.message);
+    console.error('Groq API error:', err.message);
     if (err.message?.includes('JSON')) {
       res.status(500).json({ error: 'AI returned unexpected output. Try again.' });
     } else {
@@ -233,9 +232,9 @@ ensureDataFile().then(() => {
   app.listen(PORT, () => {
     console.log(`\n🇩🇪  DeutschSnap Study is running!`);
     console.log(`   Open: http://localhost:${PORT}\n`);
-    if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY === 'your_openrouter_api_key_here') {
-      console.log(`⚠️  No API key found. Get a free key at: https://openrouter.ai`);
-      console.log(`   No credit card needed — sign in with Google or GitHub.\n`);
+    if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_groq_api_key_here') {
+      console.log(`⚠️  No API key found. Get a free key at: https://console.groq.com`);
+      console.log(`   No credit card needed.\n`);
     }
   });
 });
