@@ -1,0 +1,120 @@
+[
+  {
+    "id": "ss-001",
+    "title": "Modal Verbs",
+    "topic": "German Grammar – Modal Verbs",
+    "rawText": "Modal verbs: können, müssen, dürfen, wollen, sollen, möchten",
+    "vocabulary": [
+      { "german": "können", "english": "can / to be able to", "wordType": "modal", "example": "Ich kann Deutsch sprechen.", "exampleTranslation": "I can speak German." },
+      { "german": "müssen", "english": "must / have to", "wordType": "modal", "example": "Du musst jetzt lernen.", "exampleTranslation": "You must study now." },
+      { "german": "dürfen", "english": "may / to be allowed to", "wordType": "modal", "example": "Darf ich hereinkommen?", "exampleTranslation": "May I come in?" },
+      { "german": "wollen", "english": "want to", "wordType": "modal", "example": "Wir wollen nach Berlin fahren.", "exampleTranslation": "We want to travel to Berlin." },
+      { "german": "sollen", "english": "should / supposed to", "wordType": "modal", "example": "Du sollst die Hausaufgaben machen.", "exampleTranslation": "You are supposed to do the homework." },
+      { "german": "möchten", "english": "would like to", "wordType": "modal", "example": "Ich möchte einen Kaffee, bitte.", "exampleTranslation": "I would like a coffee, please." }
+    ],
+    "grammarTopics": [
+      {
+        "title": "Modal Verb Position",
+        "rule": "The modal verb takes the second position in the sentence, and the main verb moves to the END in its infinitive form.",
+        "examples": [
+          { "german": "Ich kann Deutsch sprechen.", "english": "I can speak German." },
+          { "german": "Er muss morgen arbeiten.", "english": "He must work tomorrow." }
+        ],
+        "tip": "Modal verb = position 2, main verb = end of sentence!"
+      },
+      {
+        "title": "Conjugation (Present Tense)",
+        "rule": "Modal verbs are irregular. The ich and er/sie/es forms are the same and have no ending.",
+        "examples": [
+          { "german": "ich kann / er kann", "english": "I can / he can" },
+          { "german": "ich muss / er muss", "english": "I must / he must" }
+        ],
+        "tip": "Ich and er/sie/es look the same — no extra ending needed!"
+      }
+    ],
+    "exampleSentences": [
+      { "german": "Ich kann gut schwimmen.", "english": "I can swim well." },
+      { "german": "Sie muss heute arbeiten.", "english": "She has to work today." },
+      { "german": "Wir wollen Pizza essen.", "english": "We want to eat pizza." },
+      { "german": "Er möchte Arzt werden.", "english": "He would like to become a doctor." }
+    ],
+    "quizQuestions": [
+      { "question": "What does 'können' mean?", "correctAnswer": "can / to be able to", "options": ["must / have to", "can / to be able to", "want to", "should"], "explanation": "Können expresses ability — being able to do something." },
+      { "question": "What does 'müssen' mean?", "correctAnswer": "must / have to", "options": ["can / to be able to", "may / allowed to", "must / have to", "would like to"], "explanation": "Müssen expresses obligation or necessity." },
+      { "question": "Where does the main verb go with a modal verb?", "correctAnswer": "At the end of the sentence", "options": ["At the beginning", "Right after the subject", "At the end of the sentence", "Right after the modal"], "explanation": "With modal verbs, the main verb (infinitive) always goes to the END!" },
+      { "question": "Which modal verb means 'may / to be allowed to'?", "correctAnswer": "dürfen", "options": ["können", "müssen", "wollen", "dürfen"], "explanation": "Dürfen is used to express permission." },
+      { "question": "Which is correct: 'Ich ___ Deutsch sprechen' (can)?", "correctAnswer": "kann", "options": ["können", "kann", "kannen", "könn"], "explanation": "For ich/er/sie/es, können becomes 'kann' — no ending!" },
+      { "question": "What does 'möchten' mean?", "correctAnswer": "would like to", "options": ["want to", "must", "would like to", "may"], "explanation": "Möchten is the polite form — use it when ordering or requesting things." }
+    ],
+    "toMemorize": [
+      "The 6 modal verbs: können, müssen, dürfen, wollen, sollen, möchten",
+      "Modal verb goes in position 2; main verb (infinitive) goes to the END",
+      "Ich and er/sie/es forms are the same for most modals",
+      "können → kann, müssen → muss, dürfen → darf, wollen → will, sollen → soll"
+    ],
+    "toUnderstand": [
+      "Each modal has a specific meaning — dürfen = permission, müssen = obligation",
+      "The difference between wollen (want) and möchten (would like)",
+      "Why the infinitive goes to the end (verb bracket structure)"
+    ],
+    "homework": [
+      { "question": "Fill in the blank: 'Er ___ morgen zur Schule gehen.' (must)", "hint": "Which modal verb means must/have to? Think about what form goes with er/sie/es.", "answer": "muss", "explanation": "Müssen conjugates to 'muss' for er/sie/es. The sentence means 'He must go to school tomorrow.' Notice 'gehen' stays as infinitive at the end." },
+      { "question": "Translate: 'May I come in?'", "hint": "Which modal expresses permission? For questions in German, the modal verb comes first.", "answer": "Darf ich hereinkommen?", "explanation": "Dürfen means 'may / to be allowed to'. In yes/no questions the modal comes first, then the subject. Hereinkommen = to come in." }
+    ],
+    "createdAt": "2026-05-19T10:00:00.000Z",
+    "lastStudied": "2026-05-20T14:00:00.000Z",
+    "masteryLevel": 65,
+    "bestQuizScore": 83
+  },
+  {
+    "id": "ss-002",
+    "title": "Food Vocabulary",
+    "topic": "German Vocabulary – Food & Eating",
+    "rawText": "Common German food vocabulary",
+    "vocabulary": [
+      { "german": "das Brot", "english": "bread", "article": "das", "wordType": "noun", "example": "Ich esse Brot zum Frühstück.", "exampleTranslation": "I eat bread for breakfast." },
+      { "german": "die Milch", "english": "milk", "article": "die", "wordType": "noun", "example": "Ich trinke jeden Morgen Milch.", "exampleTranslation": "I drink milk every morning." },
+      { "german": "der Käse", "english": "cheese", "article": "der", "wordType": "noun", "example": "Der Käse ist sehr lecker.", "exampleTranslation": "The cheese is very tasty." },
+      { "german": "das Fleisch", "english": "meat", "article": "das", "wordType": "noun", "example": "Magst du Fleisch?", "exampleTranslation": "Do you like meat?" },
+      { "german": "das Gemüse", "english": "vegetables", "article": "das", "wordType": "noun", "example": "Gemüse ist gesund.", "exampleTranslation": "Vegetables are healthy." },
+      { "german": "die Frucht", "english": "fruit", "article": "die", "wordType": "noun", "example": "Ich mag frische Früchte.", "exampleTranslation": "I like fresh fruits." }
+    ],
+    "grammarTopics": [
+      {
+        "title": "German Articles (der, die, das)",
+        "rule": "Every German noun has a grammatical gender: masculine (der), feminine (die), or neuter (das). You must memorize the article with every noun.",
+        "examples": [
+          { "german": "der Käse (masculine)", "english": "the cheese" },
+          { "german": "die Milch (feminine)", "english": "the milk" },
+          { "german": "das Brot (neuter)", "english": "the bread" }
+        ],
+        "tip": "Always learn: 'das Brot' not just 'Brot'. The article IS part of the word!"
+      }
+    ],
+    "exampleSentences": [
+      { "german": "Zum Frühstück esse ich Brot mit Käse.", "english": "For breakfast I eat bread with cheese." },
+      { "german": "Das Gemüse ist frisch und lecker.", "english": "The vegetables are fresh and tasty." },
+      { "german": "Möchtest du Milch oder Wasser?", "english": "Would you like milk or water?" }
+    ],
+    "quizQuestions": [
+      { "question": "What is the article for 'Brot' (bread)?", "correctAnswer": "das", "options": ["der", "die", "das", "den"], "explanation": "Brot (bread) is neuter in German, so its article is 'das'." },
+      { "question": "What does 'das Gemüse' mean?", "correctAnswer": "vegetables", "options": ["fruit", "meat", "vegetables", "bread"], "explanation": "Gemüse means vegetables. It's neuter (das)." },
+      { "question": "What is the article for 'Milch' (milk)?", "correctAnswer": "die", "options": ["der", "die", "das", "ein"], "explanation": "Milch (milk) is feminine in German — die Milch." },
+      { "question": "How do you say 'the cheese' in German?", "correctAnswer": "der Käse", "options": ["das Käse", "die Käse", "der Käse", "den Käse"], "explanation": "Käse (cheese) is masculine — der Käse." }
+    ],
+    "toMemorize": [
+      "das Brot (bread), die Milch (milk), der Käse (cheese)",
+      "das Fleisch (meat), das Gemüse (vegetables), die Frucht (fruit)",
+      "Always memorize the article WITH the noun"
+    ],
+    "toUnderstand": [
+      "Why German nouns have genders and why it matters",
+      "How articles change in different cases (nominative vs accusative)"
+    ],
+    "homework": [],
+    "createdAt": "2026-05-15T10:00:00.000Z",
+    "lastStudied": "2026-05-18T09:00:00.000Z",
+    "masteryLevel": 80,
+    "bestQuizScore": 90
+  }
+]
