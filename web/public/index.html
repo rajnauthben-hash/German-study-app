@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeutschSnap Study</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- Nav -->
+  <nav>
+    <a class="nav-brand" href="#" onclick="showView('home')">🇩🇪 DeutschSnap</a>
+    <div class="nav-links">
+      <button class="nav-link active" id="nav-home" onclick="showView('home')">Home</button>
+      <button class="nav-link" id="nav-create" onclick="showView('create')">+ New Set</button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- ── HOME VIEW ─────────────────────────────────────────── -->
+    <div class="view active" id="view-home">
+      <div class="home-header">
+        <div>
+          <h1 class="home-title">Your Study Sets</h1>
+          <p class="home-sub">Scan a worksheet to create a new set, then practice here.</p>
+        </div>
+        <button class="btn btn-primary" onclick="showView('create')">📷 New Study Set</button>
+      </div>
+      <div id="sets-grid" class="sets-grid">
+        <div class="empty-state">
+          <div class="empty-state-icon">📚</div>
+          <h2>No study sets yet</h2>
+          <p>Create your first study set by pasting a German worksheet.</p>
+          <button class="btn btn-primary btn-lg" onclick="showView('create')">📷 Scan a Worksheet</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CREATE VIEW ───────────────────────────────────────── -->
+    <div class="view" id="view-create">
+      <div class="create-header">
+        <h1>New Study Set</h1>
+        <p>Paste or type your German worksheet text. Claude will generate vocabulary, grammar notes, quizzes, and more.</p>
+      </div>
+
+      <div id="api-warning" class="api-warning" style="display:none">
+        <strong>⚠️ API Key needed</strong><br>
+        Claude isn't connected yet. Create a <code>.env</code> file in the <code>web/</code> folder with:<br>
+        <code>ANTHROPIC_API_KEY=your_key_here</code><br>
+        Get a free key at <strong>console.anthropic.com</strong> then restart the server.
+      </div>
+
+      <div class="card">
+        <label for="worksheet-text">Worksheet Text</label>
+        <textarea
+          id="worksheet-text"
+          placeholder="Paste your German worksheet, class notes, textbook page, or homework here…
+
+Example:
+Modal verbs in German: können (can), müssen (must), dürfen (may)
+Ich kann Deutsch sprechen. – I can speak German.
+Du musst lernen. – You must study.
+
+1. Fill in the blank: Er ___ morgen zur Schule gehen. (must)
+2. Translate: May I come in?"
+          oninput="updateCharCount()"
+        ></textarea>
+        <div class="char-count" id="char-count">0 characters</div>
+      </div>
+
+      <div style="display:flex; gap:12px; flex-wrap:wrap">
+        <button class="btn btn-primary btn-lg" id="generate-btn" onclick="generateStudySet()">
+          ✨ Generate Study Set with Claude
+        </button>
+        <button class="btn btn-ghost" onclick="showView('home')">Cancel</button>
+      </div>
+
+      <div class="tips-box" style="margin-top:20px">
+        <strong>📌 Tips for best results</strong>
+        <ul>
+          <li>Include as much text as possible from your worksheet</li>
+          <li>Include the title or topic if visible (e.g. "Modal Verbs", "Past Tense")</li>
+          <li>Include example sentences, vocabulary lists, and exercises</li>
+          <li>Numbered questions will become Homework Helper questions</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── STUDY SET VIEW ────────────────────────────────────── -->
+    <div class="view" id="view-study-set">
+
+      <div class="study-header">
+        <button class="study-back" onclick="showView('home')">←</button>
+        <div class="study-header-info">
+          <div class="study-title" id="ss-title">—</div>
+          <div class="study-topic" id="ss-topic">—</div>
+        </div>
+      </div>
+
+      <!-- Quick start practice bar -->
+      <div class="practice-bar">
+        <button class="btn btn-primary btn-sm" onclick="startFlashcards()">🃏 Flashcards</button>
+        <button class="btn btn-secondary btn-sm" onclick="startQuiz()">✅ Quiz</button>
+        <button class="btn btn-outline btn-sm" onclick="startHomework()">📝 Homework Helper</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+        <button class="tab-btn" onclick="switchTab('vocabulary')">Vocabulary</button>
+        <button class="tab-btn" onclick="switchTab('grammar')">Grammar</button>
+        <button class="tab-btn" onclick="switchTab('sentences')">Sentences</button>
+      </div>
+
+      <!-- Overview tab -->
+      <div class="tab-panel active" id="tab-overview">
+        <div id="ss-memorize" class="info-card"></div>
+        <div id="ss-understand" class="info-card success-card" style="display:none"></div>
+      </div>
+
+      <!-- Vocabulary tab -->
+      <div class="tab-panel" id="tab-vocabulary">
+        <p class="section-title" id="vocab-count"></p>
+        <div class="vocab-grid" id="vocab-grid"></div>
+      </div>
+
+      <!-- Grammar tab -->
+      <div class="tab-panel" id="tab-grammar">
+        <div id="grammar-list"></div>
+      </div>
+
+      <!-- Sentences tab -->
+      <div class="tab-panel" id="tab-sentences">
+        <div id="sentences-list"></div>
+      </div>
+    </div>
+
+    <!-- ── FLASHCARD PRACTICE ────────────────────────────────── -->
+    <div class="view" id="view-flashcards">
+      <div class="study-header">
+        <button class="study-back" id="fc-back-btn">←</button>
+        <div class="study-header-info">
+          <div class="study-title">Flashcards</div>
+          <div class="study-topic" id="fc-set-name"></div>
+        </div>
+      </div>
+
+      <div id="fc-active">
+        <div class="fc-progress">
+          <div class="fc-counter" id="fc-counter">1 / 6</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="fc-progress-bar" style="width:0%;background:var(--primary)"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flashcard-wrap">
+          <div class="flashcard" id="flashcard" onclick="flipCard()">
+            <div class="flashcard-face flashcard-front">
+              <div class="fc-lang">🇩🇪 German</div>
+              <div class="fc-article" id="fc-article"></div>
+              <div class="fc-word" id="fc-word-front"></div>
+              <div class="fc-hint">Tap to see meaning →</div>
+            </div>
+            <div class="flashcard-face flashcard-back">
+              <div class="fc-lang-back">🇬🇧 English</div>
+              <div class="fc-word-back" id="fc-word-back"></div>
+              <div class="fc-example" id="fc-example"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flashcard-btns">
+          <button class="btn btn-danger" onclick="markCard(false)">🔁 Study More</button>
+          <button class="btn btn-success" onclick="markCard(true)">✅ Got it!</button>
+        </div>
+      </div>
+
+      <div id="fc-results" class="results-screen" style="display:none">
+        <div class="results-emoji" id="fc-result-emoji">🎉</div>
+        <div class="results-score" id="fc-result-score">80%</div>
+        <div class="results-label" id="fc-result-label">Great job!</div>
+        <div class="results-sub" id="fc-result-sub"></div>
+        <div class="results-actions">
+          <button class="btn btn-primary" onclick="restartFlashcards()">Restart</button>
+          <button class="btn btn-outline" onclick="backToStudySet()">Back to Study Set</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── QUIZ PRACTICE ─────────────────────────────────────── -->
+    <div class="view" id="view-quiz">
+      <div class="study-header">
+        <button class="study-back" id="quiz-back-btn">←</button>
+        <div class="study-header-info">
+          <div class="study-title">Quiz</div>
+          <div class="study-topic" id="quiz-set-name"></div>
+        </div>
+      </div>
+
+      <div id="quiz-active">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+          <span style="font-size:14px;color:var(--text-light)" id="quiz-counter">1 / 8</span>
+          <span class="badge badge-primary" id="quiz-score-badge">Score: 0</span>
+        </div>
+
+        <div class="progress-bar-wrap" style="margin-bottom:24px">
+          <div class="progress-bar-track" style="height:8px">
+            <div class="progress-bar-fill" id="quiz-progress-bar" style="width:0%;background:var(--primary)"></div>
+          </div>
+        </div>
+
+        <div class="quiz-question-card">
+          <div class="quiz-q-label" id="quiz-q-type">Multiple Choice</div>
+          <div class="quiz-q-text" id="quiz-q-text"></div>
+        </div>
+
+        <div class="quiz-options" id="quiz-options"></div>
+
+        <div class="quiz-feedback" id="quiz-feedback" style="display:none">
+          <div class="quiz-feedback-title" id="quiz-feedback-title"></div>
+          <div class="quiz-feedback-exp" id="quiz-feedback-exp"></div>
+        </div>
+
+        <button class="btn btn-primary" id="quiz-next-btn" onclick="quizNext()" style="display:none">
+          Next Question →
+        </button>
+      </div>
+
+      <div id="quiz-results" class="results-screen" style="display:none">
+        <div class="results-emoji" id="quiz-result-emoji">⭐</div>
+        <div class="results-score" id="quiz-result-score">75%</div>
+        <div class="results-label" id="quiz-result-label">Great job!</div>
+        <div class="results-sub" id="quiz-result-sub"></div>
+        <div id="quiz-mistakes-section" style="text-align:left;margin:20px 0"></div>
+        <div class="results-actions">
+          <button class="btn btn-primary" onclick="restartQuiz()">Try Again</button>
+          <button class="btn btn-outline" onclick="backToStudySet()">Back to Study Set</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HOMEWORK HELPER ───────────────────────────────────── -->
+    <div class="view" id="view-homework">
+      <div class="study-header">
+        <button class="study-back" onclick="backToStudySet()">←</button>
+        <div class="study-header-info">
+          <div class="study-title">Homework Helper</div>
+          <div class="study-topic" id="hw-set-name"></div>
+        </div>
+      </div>
+
+      <p style="font-size:14px;color:var(--text-sec);margin-bottom:20px">
+        Try each question yourself first. Reveal hints one at a time, then see the full answer when you're ready.
+      </p>
+
+      <div id="hw-questions"></div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <div class="loading-msg" id="loading-msg">Reading your worksheet…</div>
+    <div class="loading-sub">Claude is analyzing your text</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
