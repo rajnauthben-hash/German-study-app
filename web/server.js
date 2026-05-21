@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,7 +31,7 @@ async function writeSets(sets) {
   await fs.writeFile(DATA_FILE, JSON.stringify(sets, null, 2));
 }
 
-// ─── Claude API ───────────────────────────────────────────────────────────────
+// ─── Gemini API ───────────────────────────────────────────────────────────────
 
 const CLAUDE_PROMPT = (text) => `You are a German language teacher assistant.
 Analyze this German worksheet text and create a detailed study set.
@@ -88,7 +88,7 @@ ${text}`;
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 
-// Generate a study set from pasted text using Claude
+// Generate a study set from pasted text using Gemini
 app.post('/api/generate', async (req, res) => {
   const { text } = req.body;
 
@@ -96,24 +96,20 @@ app.post('/api/generate', async (req, res) => {
     return res.status(400).json({ error: 'No text provided.' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === 'your_claude_api_key_here') {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
     return res.status(503).json({
-      error: 'ANTHROPIC_API_KEY not set. Copy .env.example to .env and add your key.',
+      error: 'GEMINI_API_KEY not set. Copy .env.example to .env and add your free key from aistudio.google.com',
       demo: true,
     });
   }
 
   try {
-    const client = new Anthropic({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const message = await client.messages.create({
-      model: 'claude-opus-4-7',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: CLAUDE_PROMPT(text) }],
-    });
-
-    const responseText = message.content[0].text.trim();
+    const result = await model.generateContent(CLAUDE_PROMPT(text));
+    const responseText = result.response.text().trim();
 
     // Strip markdown code fences if present
     const jsonText = responseText.replace(/^```json?\s*/i, '').replace(/\s*```$/, '');
@@ -129,7 +125,7 @@ app.post('/api/generate', async (req, res) => {
 
     res.json(studySet);
   } catch (err) {
-    console.error('Claude API error:', err.message);
+    console.error('Gemini API error:', err.message);
     if (err.message?.includes('JSON')) {
       res.status(500).json({ error: 'Claude returned unexpected output. Try again.' });
     } else {
@@ -199,9 +195,9 @@ ensureDataFile().then(() => {
   app.listen(PORT, () => {
     console.log(`\n🇩🇪  DeutschSnap Study is running!`);
     console.log(`   Open: http://localhost:${PORT}\n`);
-    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_claude_api_key_here') {
-      console.log(`⚠️  No API key found. Copy .env.example to .env and add your key.`);
-      console.log(`   Get one at: https://console.anthropic.com\n`);
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
+      console.log(`⚠️  No API key found. Copy .env.example to .env and add your free Gemini key.`);
+      console.log(`   Get one free at: https://aistudio.google.com\n`);
     }
   });
 });
