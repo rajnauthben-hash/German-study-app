@@ -241,46 +241,125 @@ async function handlePhoto(event) {
   const ocrProgress = document.getElementById('ocr-progress');
   const ocrStatus = document.getElementById('ocr-status');
   ocrProgress.style.display = 'flex';
-  ocrStatus.textContent = 'Reading your worksheet…';
+  ocrStatus.textContent = 'Enhancing image for better reading…';
 
   try {
-    const result = await Tesseract.recognize(file, 'deu+eng', {
+    // ── Preprocess image for better OCR accuracy ────────────────────────────
+    const processedBlob = await preprocessImageForOCR(file, ocrStatus);
+
+    ocrStatus.textContent = 'Reading text… 0%';
+    const result = await Tesseract.recognize(processedBlob, 'deu+eng', {
       logger: m => {
         if (m.status === 'recognizing text') {
           ocrStatus.textContent = `Reading… ${Math.round(m.progress * 100)}%`;
         }
       },
     });
+
     let text = result.data.text.trim();
-    // Clean up common OCR artifacts
-    text = text
-      .replace(/[|}{\\^~`]/g, '')         // stray symbols
-      .replace(/[ \t]{3,}/g, '  ')         // collapse excessive spaces
-      .replace(/\n{3,}/g, '\n\n')          // collapse excessive blank lines
-      .trim();
-    const textarea = document.getElementById('worksheet-text');
-    textarea.value = text;
-    updateCharCount();
-    if (!text) {
-      ocrStatus.textContent = '❌ No text found — try better lighting or type it manually.';
-      showToast('No text found in photo. Try a clearer shot or type the text.', 'warning');
+
+    // Detect garbled OCR (too many non-letter characters = bad scan)
+    const letterRatio = (text.match(/[a-zA-ZäöüÄÖÜß]/g) || []).length / Math.max(text.length, 1);
+    const garbleWarning = document.getElementById('ocr-garble-warning');
+
+    if (letterRatio < 0.4 && text.length > 20) {
+      // OCR probably failed — show raw output but warn prominently
+      if (garbleWarning) garbleWarning.style.display = 'block';
+      ocrStatus.textContent = '⚠️ Text may be garbled — please review and correct below.';
+      showToast('OCR struggled with this photo. Correct the text below or type it manually.', 'warning');
     } else {
+      if (garbleWarning) garbleWarning.style.display = 'none';
+      // Clean up minor OCR artifacts
+      text = text
+        .replace(/[|}{\\^~`©®]/g, '')       // stray symbols common in bad OCR
+        .replace(/[ \t]{3,}/g, '  ')          // collapse excessive spaces
+        .replace(/\n{3,}/g, '\n\n')           // collapse excessive blank lines
+        .trim();
       ocrStatus.textContent = `✅ Got ${text.length} characters! Review below, then tap Generate.`;
       showToast('Text extracted! Check it looks right before generating.', 'info');
     }
-    setTimeout(() => { ocrProgress.style.display = 'none'; }, 3500);
+
+    const textarea = document.getElementById('worksheet-text');
+    textarea.value = text;
+    updateCharCount();
+
+    if (!text) {
+      ocrStatus.textContent = '❌ No text found — try better lighting or type it manually.';
+      showToast('No text found in photo. Try a clearer shot or type the text.', 'warning');
+    }
+
+    setTimeout(() => { ocrProgress.style.display = 'none'; }, 4000);
   } catch (err) {
-    ocrStatus.textContent = '❌ Could not read photo. Try again.';
-    setTimeout(() => { ocrProgress.style.display = 'none'; }, 2500);
+    ocrStatus.textContent = '❌ Could not read photo. Try again or type your text.';
+    setTimeout(() => { ocrProgress.style.display = 'none'; }, 3000);
     console.error('OCR error:', err);
   }
   event.target.value = '';
 }
 
-function clearPhoto() {
-  document.getElementById('photo-preview').src = '';
-  document.getElementById('photo-preview-wrap').style.display = 'none';
+/**
+ * Preprocess image using Canvas for better OCR accuracy:
+ * - Resize to max 2400px wide (Tesseract works better with larger images)
+ * - Convert to greyscale
+ * - Boost contrast to make text pop against background
+ */
+function preprocessImageForOCR(file, statusEl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        if (statusEl) statusEl.textContent = 'Enhancing image…';
+
+        const MAX_DIM = 2400;
+        let { width, height } = img;
+
+        // Scale up if too small, scale down if too large
+        const scale = Math.min(MAX_DIM / Math.max(width, height), 3);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // Draw scaled image
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Apply greyscale + contrast boost via pixel manipulation
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const d = imageData.data;
+        const contrast = 60; // 0–100, higher = sharper text
+        const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+        for (let i = 0; i < d.length; i += 4) {
+          // Greyscale
+          const grey = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          // Contrast stretch
+          const c = factor * (grey - 128) + 128;
+          const v = Math.max(0, Math.min(255, c));
+          d[i] = d[i + 1] = d[i + 2] = v;
+          // alpha unchanged
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error('Canvas toBlob failed'));
+        }, 'image/png');
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = url;
+  });
 }
+
+
 
 function updateCharCount() {
   const text = document.getElementById('worksheet-text')?.value || '';

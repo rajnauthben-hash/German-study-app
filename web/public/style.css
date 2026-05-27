@@ -1159,7 +1159,19 @@ textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
   color: var(--text-sec);
 }
 .tips-box strong { color: var(--primary); display: block; margin-bottom: 8px; }
-.tips-box li { margin-left: 16px; margin-bottom: 4px; }
+.tips-box li { margin-left: 16px; margin-bottom: 6px; line-height: 1.5; }
+
+/* ── OCR garble warning ─────────────────────────────────────── */
+.ocr-garble-warning {
+  background: #fff3cd;
+  border: 2px solid #ff9f43;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: 14px;
+  color: #7a4f00;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
 
 /* ── Loading Overlay ───────────────────────────────────────── */
 .loading-overlay {
