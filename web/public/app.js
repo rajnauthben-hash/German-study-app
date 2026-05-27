@@ -85,9 +85,15 @@ function saveProgress(p) {
 }
 
 function getSettings() {
-  const defaults = { name: 'Student', level: 'A2', apiUrl: 'http://localhost:3000', dailyGoal: 15 };
+  // Default apiUrl to same origin so it works on Replit, localhost, anywhere
+  const defaults = { name: 'Student', level: 'A2', apiUrl: window.location.origin, dailyGoal: 15 };
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem('ds_settings') || '{}') };
+    const saved = JSON.parse(localStorage.getItem('ds_settings') || '{}');
+    // If saved URL is localhost but we're not on localhost, reset it to current origin
+    if (saved.apiUrl && saved.apiUrl.includes('localhost') && !window.location.hostname.includes('localhost')) {
+      saved.apiUrl = window.location.origin;
+    }
+    return { ...defaults, ...saved };
   } catch { return defaults; }
 }
 
