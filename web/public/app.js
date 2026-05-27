@@ -216,16 +216,18 @@ function getStreakMessage(streak) {
 // ─── Create / Scan ────────────────────────────────────────────────────────────
 
 function initCreate() {
-  const settings = getSettings();
   updateCharCount();
-
-  // Show API URL hint if not localhost
+  // Reset OCR state when entering create view
+  const garbleWarning = document.getElementById('ocr-garble-warning');
+  const ocrProgress = document.getElementById('ocr-progress');
+  if (garbleWarning) garbleWarning.style.display = 'none';
+  if (ocrProgress) ocrProgress.style.display = 'none';
+  // Always show which API will be used
+  const settings = getSettings();
   const hintEl = document.getElementById('api-url-hint');
-  if (settings.apiUrl && settings.apiUrl !== 'http://localhost:3000') {
+  if (hintEl) {
     hintEl.textContent = `Using: ${settings.apiUrl}`;
     hintEl.style.display = 'block';
-  } else {
-    hintEl.style.display = 'none';
   }
 }
 
@@ -388,6 +390,19 @@ function preprocessImageForOCR(file, statusEl) {
 }
 
 
+
+function clearPhoto() {
+  const preview = document.getElementById('photo-preview');
+  const previewWrap = document.getElementById('photo-preview-wrap');
+  const garbleWarning = document.getElementById('ocr-garble-warning');
+  const ocrProgress = document.getElementById('ocr-progress');
+  if (preview) preview.src = '';
+  if (previewWrap) previewWrap.style.display = 'none';
+  if (garbleWarning) garbleWarning.style.display = 'none';
+  if (ocrProgress) ocrProgress.style.display = 'none';
+  const input = document.getElementById('camera-input');
+  if (input) input.value = '';
+}
 
 function updateCharCount() {
   const text = document.getElementById('worksheet-text')?.value || '';
@@ -1001,8 +1016,11 @@ function renderQuizQuestion() {
 
   const optionsEl = document.getElementById('quiz-options');
   if (q.options?.length) {
+    // Store answer data on the container to avoid inline JSON in onclick attributes
+    optionsEl.dataset.correct = q.correctAnswer;
+    optionsEl.dataset.explanation = q.explanation || '';
     optionsEl.innerHTML = q.options.map(opt =>
-      `<button class="quiz-option" onclick="selectOption(this, ${JSON.stringify(opt)}, ${JSON.stringify(q.correctAnswer)}, ${JSON.stringify(q.explanation || '')})">${esc(opt)}</button>`
+      `<button class="quiz-option" data-opt="${esc(opt)}" onclick="selectOption(this)">${esc(opt)}</button>`
     ).join('');
   } else {
     optionsEl.innerHTML = `<div class="info-card"><p style="color:var(--text-light);font-size:13px">Answer:</p><p style="font-size:16px;font-weight:700;color:var(--primary)">${esc(q.correctAnswer)}</p></div>`;
@@ -1010,15 +1028,20 @@ function renderQuizQuestion() {
   }
 }
 
-function selectOption(el, selected, correct, explanation) {
+function selectOption(el) {
   if (state.quiz.answered) return;
   state.quiz.answered = true;
+
+  const optionsEl = document.getElementById('quiz-options');
+  const selected = el.dataset.opt;
+  const correct = optionsEl.dataset.correct;
+  const explanation = optionsEl.dataset.explanation || '';
 
   const isCorrect = normalizeAnswer(selected) === normalizeAnswer(correct);
 
   document.querySelectorAll('.quiz-option').forEach(b => {
     b.disabled = true;
-    if (normalizeAnswer(b.textContent.trim()) === normalizeAnswer(correct)) b.classList.add('correct');
+    if (normalizeAnswer(b.dataset.opt || b.textContent.trim()) === normalizeAnswer(correct)) b.classList.add('correct');
   });
 
   if (!isCorrect) {
@@ -1105,10 +1128,20 @@ function startHomework(setId) {
   const sets = getSets();
   const set = sets.find(s => s.id === setId) || state.currentSet;
   if (!set) { showToast('Study set not found.', 'error'); return; }
-  if (!set.homework?.length) { showToast('No homework questions in this set.', 'error'); return; }
-
   state.currentSet = set;
   document.getElementById('hw-set-name').textContent = set.title;
+
+  if (!set.homework?.length) {
+    document.getElementById('hw-questions').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <h3>No homework questions</h3>
+        <p>This study set has no homework questions. They appear when numbered questions (1. 2. 3.) are found in your worksheet.</p>
+        <button class="btn btn-primary" onclick="backToStudySet()">← Back to Study Set</button>
+      </div>`;
+    showView('homework');
+    return;
+  }
 
   document.getElementById('hw-questions').innerHTML = set.homework.map((q, i) => `
     <div class="hw-card" id="hw-${i}">
@@ -1482,7 +1515,7 @@ function initSettings() {
   const s = getSettings();
   document.getElementById('settings-name').value = s.name || '';
   document.getElementById('settings-level').value = s.level || 'A2';
-  document.getElementById('settings-api-url').value = s.apiUrl || 'http://localhost:3000';
+  document.getElementById('settings-api-url').value = s.apiUrl || window.location.origin;
   document.getElementById('settings-goal').value = s.dailyGoal || 15;
   document.getElementById('api-connection-status').textContent = '';
 }
@@ -1491,7 +1524,7 @@ function saveSettingsForm() {
   const s = {
     name: document.getElementById('settings-name').value.trim() || 'Student',
     level: document.getElementById('settings-level').value,
-    apiUrl: (document.getElementById('settings-api-url').value.trim() || 'http://localhost:3000').replace(/\/$/, ''),
+    apiUrl: (document.getElementById('settings-api-url').value.trim() || window.location.origin).replace(/\/$/, ''),
     dailyGoal: parseInt(document.getElementById('settings-goal').value) || 15,
   };
   saveSettings(s);
@@ -1499,7 +1532,7 @@ function saveSettingsForm() {
 }
 
 async function checkApiConnection() {
-  const apiUrl = (document.getElementById('settings-api-url').value.trim() || 'http://localhost:3000').replace(/\/$/, '');
+  const apiUrl = (document.getElementById('settings-api-url').value.trim() || window.location.origin).replace(/\/$/, '');
   const statusEl = document.getElementById('api-connection-status');
   statusEl.textContent = 'Testing…';
   statusEl.style.color = 'var(--text-light)';
