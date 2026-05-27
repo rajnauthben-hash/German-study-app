@@ -254,6 +254,9 @@ async function handlePhoto(event) {
           ocrStatus.textContent = `Reading… ${Math.round(m.progress * 100)}%`;
         }
       },
+      // Better page segmentation for printed worksheets
+      tessedit_pageseg_mode: '6',
+      preserve_interword_spaces: '1',
     });
 
     let text = result.data.text.trim();
@@ -298,10 +301,13 @@ async function handlePhoto(event) {
 }
 
 /**
- * Preprocess image using Canvas for better OCR accuracy:
- * - Resize to max 2400px wide (Tesseract works better with larger images)
- * - Convert to greyscale
- * - Boost contrast to make text pop against background
+ * Preprocess image for OCR using Otsu binarization.
+ *
+ * Steps:
+ * 1. Scale image up to 3000px on the longest side (Tesseract accuracy scales with resolution)
+ * 2. Convert to greyscale
+ * 3. Apply Otsu's threshold to find the optimal black/white cutoff automatically
+ * 4. Output pure black-on-white image — the ideal input for Tesseract
  */
 function preprocessImageForOCR(file, statusEl) {
   return new Promise((resolve, reject) => {
@@ -312,11 +318,10 @@ function preprocessImageForOCR(file, statusEl) {
       try {
         if (statusEl) statusEl.textContent = 'Enhancing image…';
 
-        const MAX_DIM = 2400;
+        // Scale to 3000px on longest side — more pixels = better OCR
+        const TARGET = 3000;
         let { width, height } = img;
-
-        // Scale up if too small, scale down if too large
-        const scale = Math.min(MAX_DIM / Math.max(width, height), 3);
+        const scale = Math.min(TARGET / Math.max(width, height), 4);
         width = Math.round(width * scale);
         height = Math.round(height * scale);
 
@@ -324,24 +329,47 @@ function preprocessImageForOCR(file, statusEl) {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-
-        // Draw scaled image
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Apply greyscale + contrast boost via pixel manipulation
         const imageData = ctx.getImageData(0, 0, width, height);
         const d = imageData.data;
-        const contrast = 60; // 0–100, higher = sharper text
-        const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+        const len = width * height;
 
-        for (let i = 0; i < d.length; i += 4) {
-          // Greyscale
-          const grey = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          // Contrast stretch
-          const c = factor * (grey - 128) + 128;
-          const v = Math.max(0, Math.min(255, c));
-          d[i] = d[i + 1] = d[i + 2] = v;
-          // alpha unchanged
+        // ── Step 1: greyscale ────────────────────────────────────────
+        const grey = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          grey[i] = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+        }
+
+        // ── Step 2: Otsu threshold ───────────────────────────────────
+        // Build histogram
+        const hist = new Int32Array(256);
+        for (let i = 0; i < len; i++) hist[grey[i]]++;
+
+        // Find optimal threshold
+        let sumAll = 0;
+        for (let t = 0; t < 256; t++) sumAll += t * hist[t];
+
+        let sumB = 0, wB = 0, maxVar = 0, threshold = 128;
+        for (let t = 0; t < 256; t++) {
+          wB += hist[t];
+          if (!wB) continue;
+          const wF = len - wB;
+          if (!wF) break;
+          sumB += t * hist[t];
+          const mB = sumB / wB;
+          const mF = (sumAll - sumB) / wF;
+          const varBetween = wB * wF * (mB - mF) ** 2;
+          if (varBetween > maxVar) { maxVar = varBetween; threshold = t; }
+        }
+
+        // ── Step 3: binarize ─────────────────────────────────────────
+        for (let i = 0; i < len; i++) {
+          const v = grey[i] > threshold ? 255 : 0;
+          d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+          d[i * 4 + 3] = 255;
         }
 
         ctx.putImageData(imageData, 0, 0);
