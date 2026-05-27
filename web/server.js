@@ -32,20 +32,27 @@ async function writeSets(sets) {
 
 // ─── Groq API ─────────────────────────────────────────────────────────────────
 
-const STUDY_PROMPT = (text) => `You are a German language teacher assistant.
-Analyze this German worksheet text and create a detailed study set.
+const STUDY_PROMPT = (text) => `You are a German language teacher assistant. Your job is to ALWAYS create a useful study set from ANY text provided — never refuse or return an error.
 
-Return ONLY valid JSON — no markdown, no explanation, just the JSON object.
+IMPORTANT RULES:
+- ALWAYS return valid JSON, no matter what the text looks like
+- NEVER say the text is invalid or refuse to process it
+- If the text is unclear (e.g. from OCR), do your best to identify German words and grammar
+- If you can't find specific content, invent 5–10 relevant German vocabulary items based on any topic you can infer
+- Always populate vocabulary with at least 5 items and quizQuestions with at least 4 items
+- The text may come from a photo scan and may have OCR artifacts — work around them
+
+Return ONLY valid JSON — no markdown, no explanation, no code fences, just the raw JSON object.
 
 Required structure:
 {
-  "title": "Short title like 'Modal Verbs' or 'Food Vocabulary'",
-  "topic": "Full topic description",
+  "title": "Short descriptive title like 'Modal Verbs' or 'Food Vocabulary' (never 'Invalid Text')",
+  "topic": "Full topic description based on what you can infer",
   "vocabulary": [
     {
       "german": "German word",
       "english": "English meaning",
-      "article": "der/die/das (null if not a noun)",
+      "article": "der/die/das or null if not a noun",
       "wordType": "noun/verb/adjective/modal/adverb/preposition",
       "example": "Example sentence in German",
       "exampleTranslation": "English translation of the example"

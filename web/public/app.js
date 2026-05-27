@@ -251,13 +251,24 @@ async function handlePhoto(event) {
         }
       },
     });
-    const text = result.data.text.trim();
+    let text = result.data.text.trim();
+    // Clean up common OCR artifacts
+    text = text
+      .replace(/[|}{\\^~`]/g, '')         // stray symbols
+      .replace(/[ \t]{3,}/g, '  ')         // collapse excessive spaces
+      .replace(/\n{3,}/g, '\n\n')          // collapse excessive blank lines
+      .trim();
     const textarea = document.getElementById('worksheet-text');
     textarea.value = text;
     updateCharCount();
-    ocrStatus.textContent = '✅ Text extracted! Review it, then tap Generate.';
-    setTimeout(() => { ocrProgress.style.display = 'none'; }, 2500);
-    if (!text) showToast('No text found — try better lighting or a clearer photo.', 'warning');
+    if (!text) {
+      ocrStatus.textContent = '❌ No text found — try better lighting or type it manually.';
+      showToast('No text found in photo. Try a clearer shot or type the text.', 'warning');
+    } else {
+      ocrStatus.textContent = `✅ Got ${text.length} characters! Review below, then tap Generate.`;
+      showToast('Text extracted! Check it looks right before generating.', 'info');
+    }
+    setTimeout(() => { ocrProgress.style.display = 'none'; }, 3500);
   } catch (err) {
     ocrStatus.textContent = '❌ Could not read photo. Try again.';
     setTimeout(() => { ocrProgress.style.display = 'none'; }, 2500);
@@ -287,9 +298,9 @@ async function generateStudySet() {
   const btn = document.getElementById('generate-btn');
   btn.disabled = true;
 
-  showLoading('Reading your worksheet…');
-  setTimeout(() => setLoadingMsg('Claude is analyzing your text…'), 1200);
-  setTimeout(() => setLoadingMsg('Creating your study set…'), 3000);
+  showLoading('Sending to AI…');
+  setTimeout(() => setLoadingMsg('AI is analyzing your worksheet…'), 1200);
+  setTimeout(() => setLoadingMsg('Building your study set…'), 3500);
 
   const settings = getSettings();
 
@@ -327,7 +338,40 @@ async function generateStudySet() {
       return;
     }
 
-    // Success
+    // Detect "Invalid Text" response from AI (AI rejected the input)
+    const isInvalidResponse = (
+      !data.vocabulary || data.vocabulary.length === 0 ||
+      (data.title || '').toLowerCase().includes('invalid') ||
+      (data.topic || '').toLowerCase().includes('does not contain')
+    );
+
+    if (isInvalidResponse) {
+      // Fall back to heuristic, but show a helpful message
+      const set = heuristicParse(text);
+      set.demo = true;
+
+      const sets2 = getSets();
+      sets2.unshift(set);
+      saveSets(sets2);
+
+      const p2 = getProgress();
+      p2.totalScans = (p2.totalScans || 0) + 1;
+      saveProgress(p2);
+
+      btn.disabled = false;
+      document.getElementById('worksheet-text').value = '';
+      updateCharCount();
+
+      showToast('AI could not read the text clearly. Try typing it manually for best results.', 'warning');
+      openStudySet(set.id);
+      return;
+    }
+
+    // Success — ensure all items have ids
+    if (data.vocabulary) data.vocabulary.forEach(v => { if (!v.id) v.id = uid(); });
+    if (data.grammarTopics) data.grammarTopics.forEach(g => { if (!g.id) g.id = uid(); });
+    if (data.quizQuestions) data.quizQuestions.forEach(q => { if (!q.id) q.id = uid(); });
+
     const sets = getSets();
     sets.unshift(data);
     saveSets(sets);
