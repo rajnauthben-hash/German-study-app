@@ -229,7 +229,7 @@ app.patch('/api/sets/:id/mastery', async (req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 ensureDataFile().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🇩🇪  DeutschSnap Study is running!`);
     console.log(`   Open: http://localhost:${PORT}\n`);
     if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_groq_api_key_here') {
