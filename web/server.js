@@ -123,6 +123,18 @@ function groqRequest(apiKey, prompt) {
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ ok: true, service: 'DeutschSnap API', version: '2.0.0' });
+});
+
+// OCR endpoint (client-side OCR is recommended; this is a stub)
+app.post('/api/ocr', (req, res) => {
+  // Groq does not support vision/image input.
+  // OCR should be performed client-side or via a dedicated vision API.
+  res.json({ text: '', confidence: 0, message: 'Use manual entry', isManualEntry: true });
+});
+
 // Generate a study set from pasted text
 app.post('/api/generate', async (req, res) => {
   const { text } = req.body;
@@ -148,9 +160,27 @@ app.post('/api/generate', async (req, res) => {
 
     const responseText = response.choices[0].message.content.trim();
 
-    // Strip markdown code fences if present
-    const jsonText = responseText.replace(/^```json?\s*/i, '').replace(/\s*```$/, '');
-    const studyData = JSON.parse(jsonText);
+    // Strip markdown code fences more aggressively
+    let jsonText = responseText
+      .replace(/^```[\w]*\s*/i, '')  // opening fence with optional language tag
+      .replace(/\s*```\s*$/i, '')     // closing fence
+      .replace(/^`+|`+$/g, '')        // any remaining backticks
+      .trim();
+
+    // Find first { to handle any preamble text
+    const firstBrace = jsonText.indexOf('{');
+    const lastBrace = jsonText.lastIndexOf('}');
+    if (firstBrace > 0 && lastBrace > firstBrace) {
+      jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+    }
+
+    let studyData;
+    try {
+      studyData = JSON.parse(jsonText);
+    } catch (parseErr) {
+      console.error('JSON parse failed. Raw response:', responseText.slice(0, 200));
+      throw new Error('AI returned malformed JSON. Please try again.');
+    }
 
     const studySet = {
       id: `ss-${Date.now()}`,

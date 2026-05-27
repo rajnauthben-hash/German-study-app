@@ -1,37 +1,18 @@
 // ─── AI Study Generator ───────────────────────────────────────────────────────
 //
-// This service takes raw text extracted from a German worksheet and generates
-// a structured StudySet with vocabulary, grammar topics, quizzes, etc.
-//
-// TO CONNECT A REAL AI API:
-//
-//   1. Claude API (Anthropic):
-//      - npm install @anthropic-ai/sdk
-//      - import Anthropic from '@anthropic-ai/sdk'
-//      - const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
-//      - const msg = await client.messages.create({ model: 'claude-opus-4-7', ... })
-//      - See generateWithClaude() example below
-//
-//   2. OpenAI:
-//      - npm install openai
-//      - import OpenAI from 'openai'
-//      - const openai = new OpenAI({ apiKey: OPENAI_API_KEY })
-//      - const completion = await openai.chat.completions.create(...)
-//
-//   3. Google Gemini:
-//      - npm install @google/generative-ai
-//      - import { GoogleGenerativeAI } from '@google/generative-ai'
-//
-// The AI prompt should instruct the model to return a JSON object matching
-// the StudySet interface (excluding id, createdAt which are added client-side).
+// Connects to the web backend (Node.js/Groq) for real AI generation.
+// Falls back to mock heuristics if the backend is unreachable.
 
 import { StudySet, VocabularyItem, GrammarTopic, QuizQuestion, HomeworkQuestion, ExampleSentence } from '../types';
 import { generateQuizQuestions } from './quizGenerator';
+import { generateStudySetFromBackend } from './apiClient';
+import { getSettings } from './settingsService';
 
 export interface GenerationResult {
   success: boolean;
   studySet?: StudySet;
   error?: string;
+  isDemo?: boolean;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -45,26 +26,112 @@ export async function generateStudySetFromText(
   }
 
   try {
-    // TODO: Replace this mock with a real AI API call.
-    // The rawText is already extracted from the worksheet image.
-    // Pass it to an AI model with the prompt below and parse the JSON response.
+    const settings = await getSettings();
+    const apiResult = await generateStudySetFromBackend(rawText, settings.apiBaseUrl);
 
-    await delay(2500); // simulate AI processing time
+    if (apiResult.success && apiResult.studySet) {
+      const studySet = normalizeStudySet(apiResult.studySet, rawText, imageUri);
+      return { success: true, studySet };
+    }
 
-    const studySet = generateMockStudySet(rawText, imageUri);
-    return { success: true, studySet };
-  } catch (error) {
-    return {
-      success: false,
-      error: 'Failed to generate study set. Please try again.',
-    };
+    // Fall back to mock if backend unavailable
+    console.warn('Backend unavailable, using mock generation:', apiResult.error);
+    const mockSet = generateMockStudySet(rawText, imageUri);
+    return { success: true, studySet: mockSet, isDemo: true };
+  } catch (_error) {
+    const mockSet = generateMockStudySet(rawText, imageUri);
+    return { success: true, studySet: mockSet, isDemo: true };
   }
 }
 
-// ─── Mock Generator (replace with real AI call) ───────────────────────────────
+// ─── Normalization helpers ─────────────────────────────────────────────────────
+
+function normalizeStudySet(data: Partial<StudySet>, rawText: string, imageUri?: string): StudySet {
+  return {
+    id: `ss-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title: data.title || 'German Worksheet',
+    topic: data.topic || 'German Study',
+    sourceImageUri: imageUri,
+    rawText,
+    vocabulary: normalizeVocabulary((data.vocabulary as unknown[] | undefined) || []),
+    grammarTopics: normalizeGrammar((data.grammarTopics as unknown[] | undefined) || []),
+    exampleSentences: normalizeSentences((data.exampleSentences as unknown[] | undefined) || []),
+    quizQuestions: normalizeQuiz((data.quizQuestions as unknown[] | undefined) || []),
+    toMemorize: Array.isArray(data.toMemorize) ? data.toMemorize : [],
+    toUnderstand: Array.isArray(data.toUnderstand) ? data.toUnderstand : [],
+    toPracticeAgain: Array.isArray(data.toPracticeAgain) ? data.toPracticeAgain : [],
+    homeworkQuestions: normalizeHomework(
+      ((data as Record<string, unknown>)['homework'] as unknown[] | undefined) ||
+      ((data.homeworkQuestions as unknown[] | undefined) ?? [])
+    ),
+    createdAt: new Date().toISOString(),
+    masteryLevel: 0,
+  };
+}
+
+function normalizeVocabulary(vocab: unknown[]): VocabularyItem[] {
+  return (vocab as Record<string, unknown>[]).map((v, i) => ({
+    id: typeof v['id'] === 'string' ? v['id'] : `v-${i}`,
+    german: typeof v['german'] === 'string' ? v['german'] : '',
+    english: typeof v['english'] === 'string' ? v['english'] : '',
+    article: (v['article'] as VocabularyItem['article']) || undefined,
+    plural: typeof v['plural'] === 'string' ? v['plural'] : undefined,
+    wordType: (v['wordType'] as VocabularyItem['wordType']) || undefined,
+    exampleSentence: (typeof v['example'] === 'string' ? v['example'] : undefined) ||
+      (typeof v['exampleSentence'] === 'string' ? v['exampleSentence'] : undefined),
+    exampleTranslation: typeof v['exampleTranslation'] === 'string' ? v['exampleTranslation'] : undefined,
+    pronunciationHint: typeof v['pronunciationHint'] === 'string' ? v['pronunciationHint'] : undefined,
+  })).filter(v => v.german && v.english);
+}
+
+function normalizeGrammar(grammar: unknown[]): GrammarTopic[] {
+  return (grammar as Record<string, unknown>[]).map((g, i) => ({
+    id: typeof g['id'] === 'string' ? g['id'] : `g-${i}`,
+    title: typeof g['title'] === 'string' ? g['title'] : 'Grammar Topic',
+    rule: typeof g['rule'] === 'string' ? g['rule'] : '',
+    examples: Array.isArray(g['examples']) ? g['examples'] as Array<{ german: string; english: string }> : [],
+    tip: typeof g['tip'] === 'string' ? g['tip'] : undefined,
+  }));
+}
+
+function normalizeSentences(sentences: unknown[]): ExampleSentence[] {
+  return (sentences as Record<string, unknown>[]).map((s, i) => ({
+    id: typeof s['id'] === 'string' ? s['id'] : `es-${i}`,
+    german: typeof s['german'] === 'string' ? s['german'] : '',
+    english: typeof s['english'] === 'string' ? s['english'] : '',
+    highlight: typeof s['highlight'] === 'string' ? s['highlight'] : undefined,
+  })).filter(s => s.german);
+}
+
+function normalizeQuiz(questions: unknown[]): QuizQuestion[] {
+  return (questions as Record<string, unknown>[]).map((q, i) => ({
+    id: typeof q['id'] === 'string' ? q['id'] : `q-${i}`,
+    type: (q['type'] as QuizQuestion['type']) || 'multiple-choice',
+    question: typeof q['question'] === 'string' ? q['question'] : '',
+    correctAnswer: typeof q['correctAnswer'] === 'string' ? q['correctAnswer'] : '',
+    options: Array.isArray(q['options']) ? q['options'] as string[] : undefined,
+    hint: typeof q['hint'] === 'string' ? q['hint'] : undefined,
+    explanation: typeof q['explanation'] === 'string' ? q['explanation'] : undefined,
+  })).filter(q => q.question && q.correctAnswer);
+}
+
+function normalizeHomework(questions: unknown[]): HomeworkQuestion[] {
+  return (questions as Record<string, unknown>[]).map((q, i) => ({
+    id: typeof q['id'] === 'string' ? q['id'] : `hw-${i}`,
+    question: typeof q['question'] === 'string' ? q['question'] : '',
+    hint1: (typeof q['hint1'] === 'string' ? q['hint1'] : undefined) ||
+      (typeof q['hint'] === 'string' ? q['hint'] : 'Think carefully about this.'),
+    hint2: typeof q['hint2'] === 'string' ? q['hint2'] : 'Look at the grammar rules.',
+    answer: typeof q['answer'] === 'string' ? q['answer'] : '',
+    explanation: typeof q['explanation'] === 'string' ? q['explanation'] : '',
+    grammarNote: typeof q['grammarNote'] === 'string' ? q['grammarNote'] : undefined,
+  })).filter(q => q.question);
+}
+
+// ─── Mock fallback (kept for offline/demo use) ────────────────────────────────
 
 function generateMockStudySet(rawText: string, imageUri?: string): StudySet {
-  const title = extractTitleFromText(rawText);
+  const title = rawText.split('\n')[0].trim().slice(0, 50) || 'German Worksheet';
   const vocab = extractVocabularyFromText(rawText);
   const grammar = extractGrammarFromText(rawText);
   const sentences = extractSentencesFromText(rawText);
@@ -72,7 +139,7 @@ function generateMockStudySet(rawText: string, imageUri?: string): StudySet {
   const homeworkQuestions = extractHomeworkFromText(rawText);
 
   return {
-    id: generateId(),
+    id: `ss-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     title,
     topic: `German Study – ${title}`,
     sourceImageUri: imageUri,
@@ -81,8 +148,8 @@ function generateMockStudySet(rawText: string, imageUri?: string): StudySet {
     grammarTopics: grammar,
     exampleSentences: sentences,
     quizQuestions,
-    toMemorize: generateMemorizeList(vocab, grammar),
-    toUnderstand: generateUnderstandList(grammar),
+    toMemorize: vocab.slice(0, 5).map(v => `${v.german} = ${v.english}`),
+    toUnderstand: grammar.map(g => `How ${g.title} works`),
     toPracticeAgain: [],
     homeworkQuestions,
     createdAt: new Date().toISOString(),
@@ -90,165 +157,44 @@ function generateMockStudySet(rawText: string, imageUri?: string): StudySet {
   };
 }
 
-// Simple heuristic parsers – replace entirely with AI output
-function extractTitleFromText(text: string): string {
-  const firstLine = text.split('\n')[0].trim();
-  if (firstLine.length > 0 && firstLine.length < 60) return firstLine;
-  return 'German Worksheet';
-}
-
 function extractVocabularyFromText(text: string): VocabularyItem[] {
-  const germanWords: string[] = [];
   const germanPattern = /\b[A-ZÄÖÜ][a-zäöüß]{2,}\b/g;
   const matches = text.match(germanPattern) ?? [];
-
-  // Deduplicate
   const unique = [...new Set(matches)].slice(0, 12);
-
   return unique.map((word, i) => ({
     id: `v-gen-${i}`,
     german: word,
-    english: `[Connect AI to translate "${word}"]`,
+    english: `[${word}]`,
     wordType: 'noun' as const,
-    exampleSentence: `${word} ist ein deutsches Wort.`,
-    exampleTranslation: `"${word}" is a German word.`,
   }));
 }
 
 function extractGrammarFromText(text: string): GrammarTopic[] {
-  // Detect keywords that hint at grammar topics
   const topics: GrammarTopic[] = [];
-
   if (/modal|können|müssen|dürfen|wollen|sollen|möchten/i.test(text)) {
-    topics.push({
-      id: 'g-gen-001',
-      title: 'Modal Verbs',
-      rule: 'Modal verbs come in position 2; the main verb (infinitive) goes to the end.',
-      examples: [{ german: 'Ich kann schwimmen.', english: 'I can swim.' }],
-      tip: 'Always send the infinitive to the end!',
-    });
+    topics.push({ id: 'g-modal', title: 'Modal Verbs', rule: 'Modal verb in position 2, infinitive at end.', examples: [{ german: 'Ich kann schwimmen.', english: 'I can swim.' }], tip: 'Infinitive goes to the end!' });
   }
-
   if (/perfekt|haben|sein|gespielt|gemacht|gegangen/i.test(text)) {
-    topics.push({
-      id: 'g-gen-002',
-      title: 'Perfekt (Past Tense)',
-      rule: 'Perfekt = haben/sein + past participle (Partizip II). Motion verbs use "sein".',
-      examples: [
-        { german: 'Ich habe gespielt.', english: 'I played / I have played.' },
-        { german: 'Er ist gegangen.', english: 'He went / He has gone.' },
-      ],
-      tip: 'Use "sein" for verbs of motion or change of state.',
-    });
+    topics.push({ id: 'g-perfekt', title: 'Perfekt', rule: 'haben/sein + Partizip II', examples: [{ german: 'Ich habe gespielt.', english: 'I played.' }] });
   }
-
-  if (/akkusativ|nominativ|dativ|artikel|den|dem/i.test(text)) {
-    topics.push({
-      id: 'g-gen-003',
-      title: 'German Cases',
-      rule: 'German has 4 cases: Nominativ (subject), Akkusativ (direct object), Dativ (indirect object), Genitiv (possession).',
-      examples: [
-        { german: 'Der Mann (Nom) gibt dem Kind (Dat) den Ball (Akk).', english: 'The man gives the child the ball.' },
-      ],
-    });
-  }
-
   if (topics.length === 0) {
-    topics.push({
-      id: 'g-gen-000',
-      title: 'Grammar Topic Detected',
-      rule: 'Connect the AI service to automatically identify and explain grammar rules from your worksheet.',
-      examples: [{ german: 'Beispiel', english: 'Example' }],
-      tip: 'Add your AI API key to unlock automatic grammar detection.',
-    });
+    topics.push({ id: 'g-gen', title: 'Grammar', rule: 'Connect backend for AI-powered grammar detection.', examples: [] });
   }
-
   return topics;
 }
 
 function extractSentencesFromText(text: string): ExampleSentence[] {
-  const sentencePattern = /[A-ZÄÖÜ][^.!?]*[.!?]/g;
-  const matches = text.match(sentencePattern) ?? [];
-
-  return matches
-    .filter((s) => s.length > 10 && s.length < 120)
-    .slice(0, 6)
-    .map((sentence, i) => ({
-      id: `es-gen-${i}`,
-      german: sentence.trim(),
-      english: '[AI translation will appear here]',
-    }));
-}
-
-function extractHomeworkFromText(text: string): HomeworkQuestion[] {
-  const questionPattern = /\d+[.)]\s+(.{10,100}[?.])/g;
-  const matches = [...text.matchAll(questionPattern)];
-
-  return matches.slice(0, 5).map((match, i) => ({
-    id: `hw-gen-${i}`,
-    question: match[1].trim(),
-    hint1: 'Think about what grammar concept this is testing.',
-    hint2: 'Look at the vocabulary section for clues.',
-    answer: '[Connect AI to generate the answer]',
-    explanation: '[Connect AI to generate a full explanation]',
+  const matches = text.match(/[A-ZÄÖÜ][^.!?]*[.!?]/g) ?? [];
+  return matches.filter(s => s.length > 10 && s.length < 120).slice(0, 6).map((s, i) => ({
+    id: `es-${i}`, german: s.trim(), english: '',
   }));
 }
 
-function generateMemorizeList(vocab: VocabularyItem[], grammar: GrammarTopic[]): string[] {
-  const items: string[] = [];
-  if (vocab.length > 0) {
-    items.push(`${vocab.length} vocabulary words from this worksheet`);
-    vocab.slice(0, 5).forEach((v) => items.push(`${v.german} = ${v.english}`));
-  }
-  if (grammar.length > 0) {
-    items.push(`Key rule: ${grammar[0].rule.substring(0, 80)}...`);
-  }
-  return items;
+function extractHomeworkFromText(text: string): HomeworkQuestion[] {
+  const matches = [...text.matchAll(/\d+[.)]\s+(.{10,100}[?.])/g)];
+  return matches.slice(0, 5).map((m, i) => ({
+    id: `hw-${i}`, question: m[1].trim(),
+    hint1: 'Think about the grammar concept.', hint2: 'Check the vocabulary section.',
+    answer: '', explanation: '',
+  }));
 }
-
-function generateUnderstandList(grammar: GrammarTopic[]): string[] {
-  return grammar.map((g) => `How ${g.title} works in sentences`);
-}
-
-function generateId(): string {
-  return `ss-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ─── Claude API Example (commented out) ──────────────────────────────────────
-//
-// async function generateWithClaude(rawText: string): Promise<StudySet> {
-//   const Anthropic = require('@anthropic-ai/sdk');
-//   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-//
-//   const message = await client.messages.create({
-//     model: 'claude-opus-4-7',
-//     max_tokens: 4096,
-//     messages: [{
-//       role: 'user',
-//       content: `You are a German language teacher assistant. Analyze this worksheet text and return a JSON object.
-//
-//       Worksheet text:
-//       ${rawText}
-//
-//       Return a JSON object with these fields:
-//       - title: string (short descriptive title)
-//       - topic: string
-//       - vocabulary: VocabularyItem[] (german, english, article, wordType, exampleSentence, exampleTranslation)
-//       - grammarTopics: GrammarTopic[] (title, rule, examples, tip)
-//       - exampleSentences: ExampleSentence[] (german, english)
-//       - quizQuestions: QuizQuestion[] (type, question, correctAnswer, options, hint, explanation)
-//       - toMemorize: string[]
-//       - toUnderstand: string[]
-//       - homeworkQuestions: HomeworkQuestion[] (question, hint1, hint2, answer, explanation)
-//
-//       Return only valid JSON, no markdown.`
-//     }],
-//   });
-//
-//   const json = JSON.parse(message.content[0].text);
-//   return { ...json, id: generateId(), rawText, createdAt: new Date().toISOString(), masteryLevel: 0 };
-// }

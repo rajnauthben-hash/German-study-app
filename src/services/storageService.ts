@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StudySet, UserProgress, MistakeReviewItem, Worksheet } from '../types';
+import { StudySet, UserProgress, MistakeReviewItem, Worksheet, StudySession } from '../types';
 import { SAMPLE_STUDY_SETS, INITIAL_PROGRESS, SAMPLE_MISTAKES } from '../data/sampleData';
 
 const KEYS = {
@@ -7,6 +7,7 @@ const KEYS = {
   PROGRESS: '@deutschsnap/progress',
   MISTAKES: '@deutschsnap/mistakes',
   WORKSHEETS: '@deutschsnap/worksheets',
+  SESSIONS: '@deutschsnap/sessions',
 };
 
 // ─── Study Sets ───────────────────────────────────────────────────────────────
@@ -165,6 +166,21 @@ export async function saveWorksheet(worksheet: Worksheet): Promise<void> {
   const worksheets = await getWorksheets();
   worksheets.unshift(worksheet);
   await AsyncStorage.setItem(KEYS.WORKSHEETS, JSON.stringify(worksheets.slice(0, 20)));
+}
+
+// ─── Study Sessions ───────────────────────────────────────────────────────────
+
+export async function getStudySessions(): Promise<StudySession[]> {
+  try {
+    const json = await AsyncStorage.getItem(KEYS.SESSIONS);
+    return json ? (JSON.parse(json) as StudySession[]) : [];
+  } catch { return []; }
+}
+
+export async function saveStudySession(session: StudySession): Promise<void> {
+  const sessions = await getStudySessions();
+  sessions.unshift(session);
+  await AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions.slice(0, 100)));
 }
 
 // ─── Reset (dev helper) ───────────────────────────────────────────────────────

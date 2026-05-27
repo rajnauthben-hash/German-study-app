@@ -153,6 +153,20 @@ export type RootStackParamList = {
   SentenceBuilder: { studySetId: string };
   HomeworkHelper: { studySetId: string };
   MistakeReview: { studySetId?: string };
+  StudyHistory: undefined;
+  VocabularyBank: undefined;
+  VerbTrainer: undefined;
+  GrammarHub: undefined;
+  Settings: undefined;
+  SessionSummary: {
+    sessionId: string;
+    score: number;
+    totalQuestions: number;
+    correctAnswers: number;
+    studySetId: string;
+    studySetTitle: string;
+    mode: PracticeMode;
+  };
 };
 
 export type TabParamList = {
@@ -161,3 +175,68 @@ export type TabParamList = {
   SavedTab: undefined;
   ProgressTab: undefined;
 };
+
+export type DrawerParamList = {
+  MainTabs: undefined;
+  StudyHistory: undefined;
+  VocabularyBank: undefined;
+  VerbTrainer: undefined;
+  GrammarHub: undefined;
+  Settings: undefined;
+};
+
+// ─── New Extended Types ───────────────────────────────────────────────────────
+
+export interface UserSettings {
+  userName: string;
+  germanLevel: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
+  dailyGoalMinutes: number;
+  preferredPracticeMode: PracticeMode;
+  apiBaseUrl: string;
+  theme: 'light' | 'dark';
+}
+
+export interface StudySession {
+  id: string;
+  studySetId: string;
+  studySetTitle: string;
+  mode: PracticeMode;
+  startedAt: string;
+  completedAt?: string;
+  score?: number;
+  totalQuestions: number;
+  correctAnswers: number;
+  mistakeIds: string[];
+}
+
+export interface MasteryItem {
+  itemId: string;
+  itemType: 'vocabulary' | 'grammar' | 'quiz';
+  studySetId: string;
+  timesCorrect: number;
+  timesWrong: number;
+  lastReviewed: string;
+  nextReviewDate: string;
+  masteryScore: number; // 0–100
+}
+
+export interface VerbItem {
+  infinitive: string;
+  english: string;
+  conjugations: {
+    ich: string; du: string; erSieEs: string;
+    wir: string; ihr: string; sieSie: string;
+  };
+  isRegular: boolean;
+  exampleSentence?: string;
+  studySetIds: string[];
+}
+
+export interface OCRResult {
+  success: boolean;
+  text: string;
+  confidence?: number;
+  error?: string;
+  isManualEntry: boolean;
+  provider?: string;
+}

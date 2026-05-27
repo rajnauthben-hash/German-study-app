@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   SafeAreaView, StatusBar, RefreshControl,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, DrawerActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, StudySet, UserProgress } from '../types';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../constants/theme';
@@ -51,7 +51,10 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
+          <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.openDrawer())} style={styles.menuBtn}>
+            <Text style={{ fontSize: 22 }}>☰</Text>
+          </TouchableOpacity>
+          <View style={styles.headerText}>
             <Text style={styles.greeting}>Hallo! 👋</Text>
             <Text style={styles.subtitle}>Ready to study German today?</Text>
           </View>
@@ -160,6 +163,8 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.md,
   },
+  menuBtn: { padding: Spacing.sm },
+  headerText: { flex: 1, marginLeft: Spacing.sm },
   greeting: {
     fontSize: Typography.fontSize2XL,
     fontWeight: Typography.fontWeightExtraBold,
