@@ -1,0 +1,7 @@
+run = "cd web && npm install && node server.js"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "cd web && node server.js"]
