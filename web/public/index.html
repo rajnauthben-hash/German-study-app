@@ -54,11 +54,32 @@
         Get a free key at <strong>console.anthropic.com</strong> then restart the server.
       </div>
 
+      <!-- Camera capture -->
+      <div class="camera-section">
+        <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+        <button class="btn btn-camera btn-lg" onclick="document.getElementById('camera-input').click()">
+          📷 Take Photo of Worksheet
+        </button>
+        <p class="camera-hint">Or type / paste text below</p>
+      </div>
+
+      <!-- OCR progress -->
+      <div id="ocr-progress" style="display:none" class="ocr-progress">
+        <div class="ocr-spinner"></div>
+        <span id="ocr-status">Reading your worksheet…</span>
+      </div>
+
+      <!-- Preview of captured photo -->
+      <div id="photo-preview-wrap" style="display:none" class="photo-preview-wrap">
+        <img id="photo-preview" src="" alt="Worksheet photo">
+        <button class="btn btn-ghost btn-sm" onclick="clearPhoto()">✕ Remove photo</button>
+      </div>
+
       <div class="card">
         <label for="worksheet-text">Worksheet Text</label>
         <textarea
           id="worksheet-text"
-          placeholder="Paste your German worksheet, class notes, textbook page, or homework here…
+          placeholder="Take a photo above, or paste your German worksheet text here…
 
 Example:
 Modal verbs in German: können (can), müssen (must), dürfen (may)
@@ -74,7 +95,7 @@ Du musst lernen. – You must study.
 
       <div style="display:flex; gap:12px; flex-wrap:wrap">
         <button class="btn btn-primary btn-lg" id="generate-btn" onclick="generateStudySet()">
-          ✨ Generate Study Set with Claude
+          ✨ Generate Study Set
         </button>
         <button class="btn btn-ghost" onclick="showView('home')">Cancel</button>
       </div>
@@ -277,6 +298,7 @@ Du musst lernen. – You must study.
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

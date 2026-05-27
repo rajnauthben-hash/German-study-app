@@ -1,3 +1,55 @@
+// ─── Camera & OCR ─────────────────────────────────────────────────────────────
+
+async function handlePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  // Show preview
+  const preview = document.getElementById('photo-preview');
+  const previewWrap = document.getElementById('photo-preview-wrap');
+  preview.src = URL.createObjectURL(file);
+  previewWrap.style.display = 'flex';
+
+  // Show OCR progress
+  const ocrProgress = document.getElementById('ocr-progress');
+  const ocrStatus = document.getElementById('ocr-status');
+  ocrProgress.style.display = 'flex';
+  ocrStatus.textContent = 'Reading your worksheet…';
+
+  try {
+    const result = await Tesseract.recognize(file, 'deu+eng', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          ocrStatus.textContent = `Reading… ${Math.round(m.progress * 100)}%`;
+        }
+      },
+    });
+
+    const text = result.data.text.trim();
+    const textarea = document.getElementById('worksheet-text');
+    textarea.value = text;
+    updateCharCount();
+    ocrStatus.textContent = '✅ Text extracted! Check it, then tap Generate.';
+    setTimeout(() => { ocrProgress.style.display = 'none'; }, 2500);
+
+    if (!text) {
+      showToast('No text found — try better lighting or a clearer photo.');
+    }
+  } catch (err) {
+    ocrStatus.textContent = '❌ Could not read photo. Try again.';
+    setTimeout(() => { ocrProgress.style.display = 'none'; }, 2500);
+    console.error('OCR error:', err);
+  }
+
+  // Reset file input so same photo can be re-selected
+  event.target.value = '';
+}
+
+function clearPhoto() {
+  document.getElementById('photo-preview').src = '';
+  document.getElementById('photo-preview-wrap').style.display = 'none';
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const state = {
