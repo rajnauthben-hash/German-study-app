@@ -37,11 +37,17 @@
   <a class="sidebar-link" id="snav-verb-trainer" onclick="showView('verb-trainer');closeSidebar()">
     <span class="sidebar-icon">⚡</span> Verb Trainer
   </a>
+  <a class="sidebar-link" id="snav-article-trainer" onclick="showView('article-trainer');closeSidebar()">
+    <span class="sidebar-icon">🏷️</span> Article Trainer
+  </a>
   <a class="sidebar-link" id="snav-grammar-hub" onclick="showView('grammar-hub');closeSidebar()">
     <span class="sidebar-icon">📐</span> Grammar Hub
   </a>
 
   <div class="sidebar-section-label">PROGRESS</div>
+  <a class="sidebar-link" id="snav-mistake-bank" onclick="showView('mistake-bank');closeSidebar()">
+    <span class="sidebar-icon">🔁</span> Mistake Bank
+  </a>
   <a class="sidebar-link" id="snav-history" onclick="showView('history');closeSidebar()">
     <span class="sidebar-icon">📅</span> Study History
   </a>
@@ -89,29 +95,34 @@
         <div class="stat-value" id="stat-words">0</div>
         <div class="stat-label">Words Learned</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-icon">✅</div>
-        <div class="stat-value" id="stat-quizzes">0</div>
-        <div class="stat-label">Quizzes Done</div>
+      <div class="stat-card" onclick="showView('mistake-bank')" style="cursor:pointer">
+        <div class="stat-icon">🔁</div>
+        <div class="stat-value" id="stat-mistakes">0</div>
+        <div class="stat-label">Mistakes</div>
       </div>
     </div>
 
+    <div class="section-header" style="margin-top:8px">
+      <h2 class="section-title">Today's Plan</h2>
+    </div>
+    <div id="dash-daily-plan" style="margin-bottom:20px"></div>
+
     <div class="quick-actions">
       <button class="quick-action-btn" onclick="showView('create')">
-        <span class="qa-icon">📷</span>
-        <span class="qa-label">New Scan</span>
+        <span class="qa-icon">➕</span>
+        <span class="qa-label">Add Worksheet</span>
       </button>
-      <button class="quick-action-btn" onclick="showView('vocabulary-bank')">
-        <span class="qa-icon">📖</span>
-        <span class="qa-label">Vocab Bank</span>
+      <button class="quick-action-btn" onclick="startMistakeReview()">
+        <span class="qa-icon">🔁</span>
+        <span class="qa-label">Review</span>
+      </button>
+      <button class="quick-action-btn" onclick="showView('article-trainer')">
+        <span class="qa-icon">🏷️</span>
+        <span class="qa-label">Articles</span>
       </button>
       <button class="quick-action-btn" onclick="showView('verb-trainer')">
         <span class="qa-icon">⚡</span>
-        <span class="qa-label">Verb Trainer</span>
-      </button>
-      <button class="quick-action-btn" onclick="showView('grammar-hub')">
-        <span class="qa-icon">📐</span>
-        <span class="qa-label">Grammar Hub</span>
+        <span class="qa-label">Verbs</span>
       </button>
     </div>
 
@@ -119,14 +130,7 @@
       <h2 class="section-title">Recent Study Sets</h2>
       <button class="btn btn-ghost btn-sm" onclick="showView('saved-sets')">View all →</button>
     </div>
-    <div id="dash-recent-sets">
-      <div class="empty-state">
-        <div class="empty-state-icon">📚</div>
-        <h3>No study sets yet</h3>
-        <p>Scan a worksheet to create your first set</p>
-        <button class="btn btn-primary" onclick="showView('create')">📷 Scan Worksheet</button>
-      </div>
-    </div>
+    <div id="dash-recent-sets"></div>
   </div>
 
   <!-- ── CREATE ─────────────────────────────────────────────── -->
@@ -234,7 +238,8 @@ Du musst lernen. – You must study.
     <div class="practice-bar">
       <button class="btn btn-primary btn-sm" onclick="startFlashcards(state.currentSet?.id)">🃏 Flashcards</button>
       <button class="btn btn-secondary btn-sm" onclick="startQuiz(state.currentSet?.id)">✅ Quiz</button>
-      <button class="btn btn-outline btn-sm" onclick="startHomework(state.currentSet?.id)">📝 Homework Helper</button>
+      <button class="btn btn-outline btn-sm" onclick="startFillInBlank(state.currentSet?.id)">✏️ Fill-in-blank</button>
+      <button class="btn btn-outline btn-sm" onclick="startHomework(state.currentSet?.id)">📝 Homework</button>
     </div>
 
     <div class="tabs">
@@ -476,6 +481,116 @@ Du musst lernen. – You must study.
       <p style="font-size:14px;color:var(--text-sec);margin-bottom:16px">This will delete all your study sets, progress, and history. This cannot be undone.</p>
       <button class="btn btn-danger" onclick="resetAllData()">🗑️ Reset All Data</button>
     </div>
+  </div>
+
+  <!-- ── ARTICLE TRAINER ──────────────────────────────────── -->
+  <div class="view" id="view-article-trainer">
+    <div class="page-header">
+      <h1 class="page-title">Article Trainer 🏷️</h1>
+      <p class="page-sub">Practice der / die / das for every noun</p>
+    </div>
+    <div id="article-trainer-body"></div>
+  </div>
+
+  <!-- ── FILL-IN-THE-BLANK ─────────────────────────────────── -->
+  <div class="view" id="view-fill-in-blank">
+    <div class="study-topbar">
+      <button class="back-btn" onclick="backToStudySet()">← Back</button>
+      <div class="study-topbar-info">
+        <div class="study-set-title">Fill-in-the-Blank</div>
+        <div class="study-set-topic" id="fib-set-name"></div>
+      </div>
+    </div>
+
+    <div id="fib-active">
+      <div class="quiz-meta">
+        <span class="quiz-counter" id="fib-counter">1 / 8</span>
+        <span class="badge badge-primary" id="fib-score">Score: 0</span>
+      </div>
+      <div class="progress-bar-track" style="margin-bottom:20px">
+        <div class="progress-bar-fill" id="fib-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="quiz-question-card">
+        <div class="quiz-q-label">Fill in the blank</div>
+        <div class="fib-sentence" id="fib-sentence"></div>
+        <div class="fib-hint-text" id="fib-hint"></div>
+      </div>
+      <input type="text" id="fib-input" class="fib-input" placeholder="Type your answer…" autocomplete="off" autocorrect="off" spellcheck="false" onkeydown="if(event.key==='Enter')checkFibAnswer()">
+      <button class="btn btn-primary" id="fib-check-btn" onclick="checkFibAnswer()" style="width:100%;margin-top:12px">Check Answer</button>
+      <div class="quiz-feedback" id="fib-feedback" style="display:none">
+        <div class="quiz-feedback-title" id="fib-feedback-title"></div>
+        <div class="quiz-feedback-exp" id="fib-feedback-exp"></div>
+      </div>
+      <button class="btn btn-primary" id="fib-next-btn" onclick="fibNext()" style="display:none;width:100%;margin-top:12px">Next →</button>
+    </div>
+
+    <div id="fib-results" class="results-screen" style="display:none">
+      <div class="results-emoji" id="fib-result-emoji">⭐</div>
+      <div class="results-score" id="fib-result-score">75%</div>
+      <div class="results-label" id="fib-result-label">Great job!</div>
+      <div class="results-sub" id="fib-result-sub"></div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="startFillInBlank(state.fib.setId)">Try Again</button>
+        <button class="btn btn-outline" onclick="backToStudySet()">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MISTAKE REVIEW ────────────────────────────────────── -->
+  <div class="view" id="view-mistake-review">
+    <div class="study-topbar">
+      <button class="back-btn" onclick="showView('mistake-bank')">← Back</button>
+      <div class="study-topbar-info">
+        <div class="study-set-title">Mistake Review</div>
+        <div class="study-set-topic" id="mr-count"></div>
+      </div>
+    </div>
+
+    <div id="mr-active">
+      <div class="quiz-meta">
+        <span class="quiz-counter" id="mr-progress">1 / 10</span>
+        <span class="badge badge-primary" id="mr-score">✅ 0</span>
+      </div>
+      <div class="progress-bar-track" style="margin-bottom:20px">
+        <div class="progress-bar-fill" id="mr-bar" style="width:0%"></div>
+      </div>
+      <div class="quiz-question-card">
+        <div class="quiz-q-label">Recall</div>
+        <div class="quiz-q-text" id="mr-question"></div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:8px" id="mr-topic"></div>
+      </div>
+      <div class="quiz-options" id="mr-options"></div>
+      <div class="quiz-feedback" id="mr-feedback" style="display:none">
+        <div class="quiz-feedback-title" id="mr-feedback-title"></div>
+        <div class="quiz-feedback-exp" id="mr-feedback-exp"></div>
+      </div>
+      <button class="btn btn-primary" id="mr-next-btn" onclick="mrNext()" style="display:none;width:100%;margin-top:12px">Next →</button>
+    </div>
+
+    <div id="mr-results" class="results-screen" style="display:none">
+      <div class="results-emoji" id="mr-result-emoji">⭐</div>
+      <div class="results-score" id="mr-result-score">0%</div>
+      <div class="results-label" id="mr-result-label">Keep going!</div>
+      <div class="results-sub" id="mr-result-sub"></div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="startMistakeReview()">Review Again</button>
+        <button class="btn btn-outline" onclick="showView('dashboard')">Home</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MISTAKE BANK ───────────────────────────────────────── -->
+  <div class="view" id="view-mistake-bank">
+    <div class="page-header">
+      <h1 class="page-title">Mistake Bank 🔁</h1>
+      <p class="page-sub">All your wrong answers, scheduled for review</p>
+    </div>
+    <div id="mb-stats" style="margin-bottom:16px"></div>
+    <div style="display:flex;gap:10px;margin-bottom:20px">
+      <button class="btn btn-primary" style="flex:1" onclick="startMistakeReview()">🔁 Review Due Now</button>
+      <button class="btn btn-outline" style="flex:1" onclick="startMistakeReview(true)">📚 Review All</button>
+    </div>
+    <div id="mb-list"></div>
   </div>
 
 </main><!-- /main-content -->

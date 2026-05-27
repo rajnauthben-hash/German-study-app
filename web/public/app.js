@@ -52,6 +52,15 @@ let state = {
   // Vocab bank
   vocabFilter: 'all',
   vocabQuery: '',
+
+  // Article trainer
+  article: { nouns: [], index: 0, score: 0, total: 0, answered: false },
+
+  // Mistake review
+  mr: { items: [], index: 0, correct: 0, answered: false },
+
+  // Fill-in-blank
+  fib: { items: [], index: 0, score: 0, answered: false, setId: null },
 };
 
 // ─── Storage Helpers ──────────────────────────────────────────────────────────
@@ -126,6 +135,64 @@ function updateStreak() {
   document.getElementById('streak-badge').textContent = `🔥 ${p.streak}`;
 }
 
+// ─── Mistake Bank ─────────────────────────────────────────────────────────────
+
+function getMistakes() {
+  try { return JSON.parse(localStorage.getItem('ds_mistakes') || '[]'); } catch { return []; }
+}
+function saveMistakes(m) { localStorage.setItem('ds_mistakes', JSON.stringify(m)); }
+
+function recordMistake({ question, myAnswer, correct, explanation, topic, setId, setTitle, mode }) {
+  const mistakes = getMistakes();
+  const existing = mistakes.find(m => m.question === question && m.correct === correct);
+  if (existing) {
+    existing.lastSeen = new Date().toISOString();
+    existing.seenCount = (existing.seenCount || 1) + 1;
+    existing.nextReview = daysFromNow(1);
+    saveMistakes(mistakes);
+    return;
+  }
+  mistakes.unshift({
+    id: uid(),
+    question, myAnswer: myAnswer || '', correct,
+    explanation: explanation || '',
+    topic: topic || '', setId: setId || '', setTitle: setTitle || '',
+    mode: mode || 'quiz',
+    date: new Date().toISOString(),
+    nextReview: daysFromNow(1),
+    reviewCount: 0, interval: 1, resolved: false,
+  });
+  saveMistakes(mistakes.slice(0, 300));
+}
+
+function getDueMistakes() {
+  const now = new Date();
+  return getMistakes().filter(m => !m.resolved && new Date(m.nextReview || 0) <= now);
+}
+
+function updateMistakeReview(id, gotItRight) {
+  const mistakes = getMistakes();
+  const m = mistakes.find(x => x.id === id);
+  if (!m) return;
+  if (gotItRight) {
+    m.reviewCount = (m.reviewCount || 0) + 1;
+    const intervals = [1, 3, 7, 14, 30, 60];
+    m.interval = intervals[Math.min(m.reviewCount, intervals.length - 1)];
+    m.nextReview = daysFromNow(m.interval);
+    m.resolved = m.reviewCount >= 4;
+  } else {
+    m.reviewCount = 0;
+    m.interval = 1;
+    m.nextReview = daysFromNow(1);
+    m.resolved = false;
+  }
+  saveMistakes(mistakes);
+}
+
+function daysFromNow(n) {
+  return new Date(Date.now() + n * 86400000).toISOString();
+}
+
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 function showView(name) {
@@ -151,6 +218,8 @@ function showView(name) {
     'history': initHistory,
     'settings': initSettings,
     'create': initCreate,
+    'article-trainer': initArticleTrainer,
+    'mistake-bank': initMistakeBankView,
   };
   if (viewInits[name]) viewInits[name]();
 }
@@ -171,10 +240,12 @@ function initDashboard() {
   const settings = getSettings();
   const p = getProgress();
   const sets = getSets();
+  const dueMistakes = getDueMistakes();
+  const allMistakes = getMistakes().filter(m => !m.resolved);
 
-  // Greeting
+  // Greeting (German!)
   const hour = new Date().getHours();
-  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greet = hour < 12 ? 'Guten Morgen' : hour < 17 ? 'Guten Tag' : 'Guten Abend';
   document.getElementById('dash-greeting').textContent = `${greet}, ${settings.name}! 👋`;
   document.getElementById('dash-sub').textContent = getStreakMessage(p.streak);
 
@@ -182,10 +253,53 @@ function initDashboard() {
   document.getElementById('stat-streak').textContent = p.streak || 0;
   document.getElementById('stat-sets').textContent = sets.length;
   document.getElementById('stat-words').textContent = p.totalWords || 0;
-  document.getElementById('stat-quizzes').textContent = p.totalQuizzes || 0;
-
-  // Streak badge
+  document.getElementById('stat-mistakes').textContent = allMistakes.length;
   document.getElementById('streak-badge').textContent = `🔥 ${p.streak || 0}`;
+
+  // Today's Study Plan
+  const planEl = document.getElementById('dash-daily-plan');
+  if (planEl) {
+    const planCards = [];
+
+    if (dueMistakes.length > 0) {
+      planCards.push(`
+        <div class="plan-card plan-urgent" onclick="startMistakeReview()">
+          <div class="plan-icon">🔁</div>
+          <div class="plan-info">
+            <div class="plan-title">${dueMistakes.length} mistake${dueMistakes.length !== 1 ? 's' : ''} due for review</div>
+            <div class="plan-sub">Scheduled review — keep these fresh</div>
+          </div>
+          <span class="plan-arrow">→</span>
+        </div>`);
+    }
+
+    if (sets.length > 0) {
+      const lastSet = [...sets].sort((a, b) =>
+        new Date(b.lastStudied || b.createdAt || 0) - new Date(a.lastStudied || a.createdAt || 0)
+      )[0];
+      planCards.push(`
+        <div class="plan-card" onclick="openStudySet('${lastSet.id}')">
+          <div class="plan-icon">📖</div>
+          <div class="plan-info">
+            <div class="plan-title">${esc(lastSet.title)}</div>
+            <div class="plan-sub">Mastery ${lastSet.masteryLevel || 0}% · ${formatDate(lastSet.lastStudied)}</div>
+          </div>
+          <span class="plan-arrow">→</span>
+        </div>`);
+    } else {
+      planCards.push(`
+        <div class="plan-card" onclick="showView('create')">
+          <div class="plan-icon">➕</div>
+          <div class="plan-info">
+            <div class="plan-title">Add your first worksheet</div>
+            <div class="plan-sub">Paste or type your German text to get started</div>
+          </div>
+          <span class="plan-arrow">→</span>
+        </div>`);
+    }
+
+    planEl.innerHTML = planCards.join('');
+  }
 
   // Recent sets (up to 4)
   const recentSets = sets.slice(0, 4);
@@ -196,8 +310,8 @@ function initDashboard() {
       <div class="empty-state">
         <div class="empty-state-icon">📚</div>
         <h3>No study sets yet</h3>
-        <p>Scan a worksheet to create your first set</p>
-        <button class="btn btn-primary" onclick="showView('create')">📷 Scan Worksheet</button>
+        <p>Add a worksheet to create your first set</p>
+        <button class="btn btn-primary" onclick="showView('create')">➕ Add Worksheet</button>
       </div>`;
     return;
   }
@@ -902,8 +1016,21 @@ function flipCard() {
 function markCard(knewIt) {
   const { cards, index } = state.fc;
   const card = cards[index];
-  if (knewIt) state.fc.known.push(card.id || card.german);
-  else state.fc.needsWork.push(card.id || card.german);
+  if (knewIt) {
+    state.fc.known.push(card.id || card.german);
+  } else {
+    state.fc.needsWork.push(card.id || card.german);
+    recordMistake({
+      question: `What does "${card.german}" mean?`,
+      myAnswer: "(couldn't remember)",
+      correct: `${card.article ? card.article + ' ' : ''}${card.german} = ${card.english}`,
+      explanation: card.example ? `Example: ${card.example}` : '',
+      topic: state.currentSet?.title || '',
+      setId: state.fc.setId || '',
+      setTitle: state.currentSet?.title || '',
+      mode: 'flashcard',
+    });
+  }
 
   if (index + 1 >= cards.length) {
     showFlashcardResults();
@@ -1046,9 +1173,18 @@ function selectOption(el) {
 
   if (!isCorrect) {
     el.classList.add('incorrect');
-    state.quiz.mistakes.push({
-      question: document.getElementById('quiz-q-text').textContent,
+    const questionText = document.getElementById('quiz-q-text').textContent;
+    state.quiz.mistakes.push({ question: questionText, correct });
+    // Persist to mistake bank for spaced repetition review
+    recordMistake({
+      question: questionText,
+      myAnswer: selected,
       correct,
+      explanation,
+      topic: state.currentSet?.topic || state.currentSet?.title || '',
+      setId: state.quiz.setId || '',
+      setTitle: state.currentSet?.title || '',
+      mode: 'quiz',
     });
   } else {
     state.quiz.score++;
@@ -1557,6 +1693,7 @@ function resetAllData() {
   localStorage.removeItem('ds_sets');
   localStorage.removeItem('ds_progress');
   localStorage.removeItem('ds_settings');
+  localStorage.removeItem('ds_mistakes');
   state.currentSet = null;
   showToast('All data reset.', 'success');
   showView('dashboard');
@@ -1628,6 +1765,415 @@ function esc(str) {
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ─── Article Trainer (der / die / das) ────────────────────────────────────────
+
+function initArticleTrainer() {
+  const sets = getSets();
+  const allNouns = [];
+
+  sets.forEach(set => {
+    (set.vocabulary || []).forEach(v => {
+      const art = (v.article || '').toLowerCase().trim();
+      if (['der', 'die', 'das'].includes(art)) {
+        allNouns.push({ ...v, setTitle: set.title, setId: set.id });
+      }
+    });
+  });
+
+  const body = document.getElementById('article-trainer-body');
+
+  if (allNouns.length === 0) {
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <h3>No nouns yet</h3>
+        <p>Generate study sets with German nouns — articles will appear here for practice.</p>
+        <button class="btn btn-primary" onclick="showView('create')">Add Worksheet</button>
+      </div>`;
+    return;
+  }
+
+  state.article = { nouns: shuffle(allNouns), index: 0, score: 0, total: 0, answered: false };
+  renderArticleCard();
+}
+
+function renderArticleCard() {
+  const { nouns, index, score } = state.article;
+  const body = document.getElementById('article-trainer-body');
+
+  if (index >= nouns.length) {
+    const pct = Math.round((score / nouns.length) * 100);
+    const info = getScoreInfo(pct);
+    body.innerHTML = `
+      <div class="results-screen" style="display:block">
+        <div class="results-emoji">${info.emoji}</div>
+        <div class="results-score">${pct}%</div>
+        <div class="results-label">${info.label}</div>
+        <div class="results-sub">${score} / ${nouns.length} correct</div>
+        <div class="results-actions">
+          <button class="btn btn-primary" onclick="initArticleTrainer()">Practice Again</button>
+          <button class="btn btn-outline" onclick="showView('dashboard')">Home</button>
+        </div>
+      </div>`;
+    updateStreak();
+    addHistoryEntry({ date: new Date().toISOString(), setId: '', setTitle: 'Article Trainer', mode: 'quiz', score: pct, wordsStudied: nouns.length });
+    return;
+  }
+
+  const noun = nouns[index];
+  body.innerHTML = `
+    <div class="article-progress">
+      <span style="color:var(--text-sec);font-size:14px">${index + 1} / ${nouns.length}</span>
+      <span style="color:var(--success);font-weight:700">✅ ${score}</span>
+    </div>
+    <div class="progress-bar-track" style="margin-bottom:20px">
+      <div class="progress-bar-fill" style="width:${(index / nouns.length) * 100}%"></div>
+    </div>
+    <div class="article-card">
+      <div class="article-label">What is the article for:</div>
+      <div class="article-word">${esc(noun.german)}</div>
+      ${noun.english ? `<div class="article-hint-en">${esc(noun.english)}</div>` : ''}
+      <div class="article-source">from: ${esc(noun.setTitle || '')}</div>
+    </div>
+    <div id="art-feedback" class="article-feedback" style="display:none"></div>
+    <div class="article-buttons" id="art-buttons">
+      <button class="btn article-btn art-der" onclick="checkArticle('der')">der</button>
+      <button class="btn article-btn art-die" onclick="checkArticle('die')">die</button>
+      <button class="btn article-btn art-das" onclick="checkArticle('das')">das</button>
+    </div>
+    <button class="btn btn-primary" id="art-next-btn" onclick="nextArticle()" style="display:none;margin-top:16px;width:100%">Next Word →</button>`;
+}
+
+function checkArticle(chosen) {
+  if (state.article.answered) return;
+  state.article.answered = true;
+  state.article.total++;
+
+  const noun = state.article.nouns[state.article.index];
+  const correct = (noun.article || '').toLowerCase().trim();
+  const isRight = chosen === correct;
+
+  if (isRight) state.article.score++;
+  else {
+    recordMistake({
+      question: `What is the article for "${noun.german}"?`,
+      myAnswer: chosen,
+      correct: `${correct} — ${correct} ${noun.german}`,
+      explanation: noun.example ? `Example: ${noun.example}` : `The correct article is "${correct}".`,
+      topic: noun.setTitle || 'Articles',
+      setId: noun.setId || '',
+      setTitle: noun.setTitle || '',
+      mode: 'article',
+    });
+  }
+
+  document.querySelectorAll('.article-btn').forEach(b => {
+    b.disabled = true;
+    const btnArticle = b.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
+    if (btnArticle === correct) b.classList.add('art-correct');
+    else if (btnArticle === chosen && !isRight) b.classList.add('art-incorrect');
+  });
+
+  const fb = document.getElementById('art-feedback');
+  fb.style.display = 'block';
+  fb.className = `article-feedback ${isRight ? 'correct' : 'incorrect'}`;
+  fb.innerHTML = isRight
+    ? `✅ Correct! <strong>${correct} ${esc(noun.german)}</strong>`
+    : `❌ It's <strong>${correct} ${esc(noun.german)}</strong>${noun.example ? `<br><small style="opacity:0.8">${esc(noun.example)}</small>` : ''}`;
+
+  document.getElementById('art-next-btn').style.display = 'block';
+}
+
+function nextArticle() {
+  state.article.index++;
+  state.article.answered = false;
+  renderArticleCard();
+}
+
+// ─── Fill-in-the-Blank ────────────────────────────────────────────────────────
+
+function startFillInBlank(setId) {
+  const sets = getSets();
+  const set = sets.find(s => s.id === setId) || state.currentSet;
+  if (!set) { showToast('Study set not found.', 'error'); return; }
+
+  const items = set.fillInTheBlank || [];
+  if (items.length === 0) {
+    showToast('No fill-in-the-blank questions in this set.', 'warning');
+    return;
+  }
+
+  state.currentSet = set;
+  state.fib = { items: shuffle([...items]), index: 0, score: 0, answered: false, setId: set.id };
+
+  document.getElementById('fib-set-name').textContent = set.title;
+  document.getElementById('fib-active').style.display = '';
+  document.getElementById('fib-results').style.display = 'none';
+
+  renderFibQuestion();
+  showView('fill-in-blank');
+  updateStreak();
+}
+
+function renderFibQuestion() {
+  const { items, index, score } = state.fib;
+  const q = items[index];
+
+  document.getElementById('fib-counter').textContent = `${index + 1} / ${items.length}`;
+  document.getElementById('fib-score').textContent = `Score: ${score}`;
+  document.getElementById('fib-progress-bar').style.width = `${(index / items.length) * 100}%`;
+
+  const sentence = (q.sentence || '').replace(/_+/, '<span class="fib-blank">___</span>');
+  document.getElementById('fib-sentence').innerHTML = sentence;
+  document.getElementById('fib-hint').textContent = q.hint || '';
+  document.getElementById('fib-input').value = '';
+  document.getElementById('fib-input').disabled = false;
+  document.getElementById('fib-feedback').style.display = 'none';
+  document.getElementById('fib-check-btn').style.display = '';
+  document.getElementById('fib-next-btn').style.display = 'none';
+  state.fib.answered = false;
+  setTimeout(() => document.getElementById('fib-input')?.focus(), 100);
+}
+
+function checkFibAnswer() {
+  if (state.fib.answered) return;
+  state.fib.answered = true;
+
+  const { items, index } = state.fib;
+  const q = items[index];
+  const userAnswer = document.getElementById('fib-input').value.trim();
+  const correct = q.answer || '';
+  const isRight = normalizeAnswer(userAnswer) === normalizeAnswer(correct);
+
+  document.getElementById('fib-input').disabled = true;
+  document.getElementById('fib-check-btn').style.display = 'none';
+
+  if (isRight) {
+    state.fib.score++;
+    document.getElementById('fib-input').classList.add('fib-correct');
+  } else {
+    document.getElementById('fib-input').classList.add('fib-incorrect');
+    recordMistake({
+      question: q.sentence || '',
+      myAnswer: userAnswer,
+      correct,
+      explanation: q.explanation || '',
+      topic: state.currentSet?.title || '',
+      setId: state.fib.setId || '',
+      setTitle: state.currentSet?.title || '',
+      mode: 'fill-in-blank',
+    });
+  }
+
+  const fb = document.getElementById('fib-feedback');
+  fb.className = `quiz-feedback ${isRight ? 'correct' : 'incorrect'}`;
+  fb.style.display = '';
+  document.getElementById('fib-feedback-title').textContent = isRight ? '✅ Correct!' : `❌ Answer: ${correct}`;
+  document.getElementById('fib-feedback-exp').textContent = q.explanation || '';
+
+  const nextBtn = document.getElementById('fib-next-btn');
+  nextBtn.textContent = index + 1 >= items.length ? 'See Results 🎉' : 'Next →';
+  nextBtn.style.display = '';
+}
+
+function fibNext() {
+  const { items, index } = state.fib;
+  if (index + 1 >= items.length) {
+    const pct = Math.round((state.fib.score / items.length) * 100);
+    const info = getScoreInfo(pct);
+    document.getElementById('fib-active').style.display = 'none';
+    document.getElementById('fib-results').style.display = '';
+    document.getElementById('fib-result-emoji').textContent = info.emoji;
+    document.getElementById('fib-result-score').textContent = `${pct}%`;
+    document.getElementById('fib-result-label').textContent = info.label;
+    document.getElementById('fib-result-sub').textContent = `${state.fib.score} / ${items.length} correct`;
+    addHistoryEntry({ date: new Date().toISOString(), setId: state.fib.setId, setTitle: state.currentSet?.title || '', mode: 'fill-in-blank', score: pct, wordsStudied: items.length });
+  } else {
+    state.fib.index++;
+    document.getElementById('fib-input').classList.remove('fib-correct', 'fib-incorrect');
+    renderFibQuestion();
+  }
+}
+
+// ─── Mistake Review (Spaced Repetition) ───────────────────────────────────────
+
+function startMistakeReview(reviewAll = false) {
+  const due = reviewAll ? getMistakes().filter(m => !m.resolved) : getDueMistakes();
+
+  if (due.length === 0) {
+    if (reviewAll) showToast('No active mistakes in the bank.', 'info');
+    else showToast('No mistakes due today — great work! 🎉', 'success');
+    return;
+  }
+
+  state.mr = { items: shuffle(due).slice(0, 20), index: 0, correct: 0, answered: false };
+
+  document.getElementById('mr-count').textContent = `${state.mr.items.length} to review`;
+  document.getElementById('mr-active').style.display = '';
+  document.getElementById('mr-results').style.display = 'none';
+
+  renderMistakeCard();
+  showView('mistake-review');
+}
+
+function renderMistakeCard() {
+  const { items, index, correct } = state.mr;
+  const item = items[index];
+
+  document.getElementById('mr-progress').textContent = `${index + 1} / ${items.length}`;
+  document.getElementById('mr-score').textContent = `✅ ${correct}`;
+  document.getElementById('mr-bar').style.width = `${(index / items.length) * 100}%`;
+  document.getElementById('mr-question').textContent = item.question;
+  document.getElementById('mr-topic').textContent = item.setTitle || item.topic || '';
+  document.getElementById('mr-feedback').style.display = 'none';
+  document.getElementById('mr-next-btn').style.display = 'none';
+  state.mr.answered = false;
+
+  // Build options: correct answer + distractors from other mistakes
+  const others = items.filter((_, i) => i !== index).map(m => m.correct).filter(Boolean);
+  const distractors = shuffle([...new Set(others)]).slice(0, 3);
+  const options = shuffle([item.correct, ...distractors]).slice(0, 4);
+
+  const optionsEl = document.getElementById('mr-options');
+  optionsEl.dataset.correct = item.correct;
+  optionsEl.dataset.id = item.id;
+
+  if (options.length >= 2) {
+    optionsEl.innerHTML = options.map(opt =>
+      `<button class="quiz-option" data-opt="${esc(opt)}" onclick="selectMrOption(this)">${esc(opt)}</button>`
+    ).join('');
+  } else {
+    optionsEl.innerHTML = `
+      <div style="padding:8px 0">
+        <button class="btn btn-success btn-lg" style="width:100%;margin-bottom:10px" onclick="selectMrOption(null,true)">✅ I knew it</button>
+        <button class="btn btn-outline btn-lg" style="width:100%" onclick="selectMrOption(null,false)">❌ I didn't know</button>
+      </div>`;
+  }
+}
+
+function selectMrOption(el, forceResult = null) {
+  if (state.mr.answered) return;
+  state.mr.answered = true;
+
+  const optionsEl = document.getElementById('mr-options');
+  const correct = optionsEl.dataset.correct;
+  const id = optionsEl.dataset.id;
+
+  let isCorrect;
+  if (forceResult !== null) {
+    isCorrect = forceResult;
+  } else {
+    const selected = el?.dataset.opt || '';
+    isCorrect = normalizeAnswer(selected) === normalizeAnswer(correct);
+    document.querySelectorAll('#mr-options .quiz-option').forEach(b => {
+      b.disabled = true;
+      if (normalizeAnswer(b.dataset.opt || '') === normalizeAnswer(correct)) b.classList.add('correct');
+    });
+    if (!isCorrect && el) el.classList.add('incorrect');
+  }
+
+  if (isCorrect) state.mr.correct++;
+  updateMistakeReview(id, isCorrect);
+
+  const item = state.mr.items[state.mr.index];
+  const fb = document.getElementById('mr-feedback');
+  fb.className = `quiz-feedback ${isCorrect ? 'correct' : 'incorrect'}`;
+  fb.style.display = '';
+  document.getElementById('mr-feedback-title').textContent = isCorrect ? '✅ Got it!' : `❌ Answer: ${correct}`;
+  document.getElementById('mr-feedback-exp').textContent = item.explanation || '';
+
+  const nextBtn = document.getElementById('mr-next-btn');
+  nextBtn.textContent = state.mr.index + 1 >= state.mr.items.length ? 'See Results 🎉' : 'Next →';
+  nextBtn.style.display = '';
+}
+
+function mrNext() {
+  const { items, index } = state.mr;
+  if (index + 1 >= items.length) showMrResults();
+  else { state.mr.index++; renderMistakeCard(); }
+}
+
+function showMrResults() {
+  const { correct, items } = state.mr;
+  const pct = Math.round((correct / items.length) * 100);
+  const info = getScoreInfo(pct);
+
+  document.getElementById('mr-active').style.display = 'none';
+  document.getElementById('mr-results').style.display = '';
+  document.getElementById('mr-result-emoji').textContent = info.emoji;
+  document.getElementById('mr-result-score').textContent = `${pct}%`;
+  document.getElementById('mr-result-label').textContent = info.label;
+  document.getElementById('mr-result-sub').textContent = `${correct} / ${items.length} · ${getMistakes().filter(m => !m.resolved).length} active mistakes remaining`;
+
+  addHistoryEntry({ date: new Date().toISOString(), setId: '', setTitle: 'Mistake Review', mode: 'quiz', score: pct, wordsStudied: items.length });
+  updateStreak();
+}
+
+// ─── Mistake Bank View (browse all mistakes) ──────────────────────────────────
+
+function initMistakeBankView() {
+  const all = getMistakes();
+  const due = getDueMistakes();
+  const active = all.filter(m => !m.resolved);
+  const resolved = all.filter(m => m.resolved);
+
+  document.getElementById('mb-stats').innerHTML = `
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--error)">${active.length}</div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--warning)">${due.length}</div>
+        <div class="stat-label">Due Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--success)">${resolved.length}</div>
+        <div class="stat-label">Resolved</div>
+      </div>
+    </div>`;
+
+  const listEl = document.getElementById('mb-list');
+
+  if (all.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🎯</div>
+        <h3>No mistakes yet</h3>
+        <p>Wrong answers from quizzes, flashcards, and the article trainer will appear here for review.</p>
+      </div>`;
+    return;
+  }
+
+  const modeIcons = { quiz: '✅', flashcard: '🃏', article: '📝', 'fill-in-blank': '✏️' };
+
+  listEl.innerHTML = active.map(m => `
+    <div class="mistake-item">
+      <div class="mistake-header">
+        <span class="mistake-mode">${modeIcons[m.mode] || '📚'} ${m.mode}</span>
+        <span class="mistake-date">${formatDate(m.date)}</span>
+      </div>
+      <div class="mistake-question">${esc(m.question)}</div>
+      <div class="mistake-answer">
+        <span class="mistake-wrong">✗ ${esc(m.myAnswer || '—')}</span>
+        <span class="mistake-correct">✓ ${esc(m.correct)}</span>
+      </div>
+      ${m.explanation ? `<div class="mistake-exp">${esc(m.explanation)}</div>` : ''}
+      <div class="mistake-footer">
+        <span>Review in: ${m.nextReview ? formatDate(m.nextReview) : '—'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="resolveMistake('${m.id}')">Mark resolved</button>
+      </div>
+    </div>`).join('');
+}
+
+function resolveMistake(id) {
+  const mistakes = getMistakes();
+  const m = mistakes.find(x => x.id === id);
+  if (m) { m.resolved = true; saveMistakes(mistakes); }
+  initMistakeBankView();
+  showToast('Marked as resolved.', 'success');
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

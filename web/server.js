@@ -32,59 +32,66 @@ async function writeSets(sets) {
 
 // ─── Groq API ─────────────────────────────────────────────────────────────────
 
-const STUDY_PROMPT = (text) => `You are a German language teacher assistant. Your job is to ALWAYS create a useful study set from ANY text provided — never refuse or return an error.
+const STUDY_PROMPT = (text) => `You are an expert German language teacher. Analyze the worksheet text and produce a comprehensive study set.
 
-IMPORTANT RULES:
-- ALWAYS return valid JSON, no matter what the text looks like
-- NEVER say the text is invalid or refuse to process it
-- If the text is unclear (e.g. from OCR), do your best to identify German words and grammar
-- If you can't find specific content, invent 5–10 relevant German vocabulary items based on any topic you can infer
-- Always populate vocabulary with at least 5 items and quizQuestions with at least 4 items
-- The text may come from a photo scan and may have OCR artifacts — work around them
+CRITICAL RULES:
+- ALWAYS return valid JSON — no markdown, no code fences, just the raw JSON object
+- NEVER refuse or say the text is invalid — always make a best-effort study set
+- If text is unclear (OCR artifacts), infer the topic and create relevant content
+- Clearly distinguish: content FROM the worksheet vs AI-generated practice material
+- All German nouns MUST have their article (der/die/das)
+- Generate at least 5 vocabulary items, 4 quiz questions, 3 fill-in-blank sentences
 
-Return ONLY valid JSON — no markdown, no explanation, no code fences, just the raw JSON object.
+Return ONLY this JSON structure:
 
-Required structure:
 {
-  "title": "Short descriptive title like 'Modal Verbs' or 'Food Vocabulary' (never 'Invalid Text')",
-  "topic": "Full topic description based on what you can infer",
+  "title": "Short title like 'Modal Verbs' or 'Sich vorstellen' — max 6 words",
+  "topic": "Full description of what this worksheet covers",
   "vocabulary": [
     {
-      "german": "German word",
+      "german": "German word (WITHOUT article)",
       "english": "English meaning",
       "article": "der/die/das or null if not a noun",
-      "wordType": "noun/verb/adjective/modal/adverb/preposition",
-      "example": "Example sentence in German",
+      "wordType": "noun/verb/adjective/modal/adverb/preposition/phrase",
+      "example": "A natural German sentence using this word",
       "exampleTranslation": "English translation of the example"
     }
   ],
   "grammarTopics": [
     {
       "title": "Grammar rule name",
-      "rule": "Clear explanation of the grammar rule",
-      "examples": [{ "german": "sentence", "english": "translation" }],
-      "tip": "Memory trick or shortcut"
+      "rule": "Clear explanation of the grammar rule in plain English",
+      "examples": [{ "german": "German sentence", "english": "Translation" }],
+      "tip": "A memorable trick or shortcut for this rule"
     }
   ],
   "exampleSentences": [
-    { "german": "...", "english": "..." }
+    { "german": "Full German sentence from the worksheet", "english": "English translation" }
   ],
   "quizQuestions": [
     {
-      "question": "Question text",
-      "correctAnswer": "The correct answer",
-      "options": ["option1", "option2", "option3", "option4"],
-      "explanation": "Why this is the correct answer"
+      "question": "Question text — mix of translation, meaning, grammar fill-in, and article questions",
+      "correctAnswer": "The single correct answer",
+      "options": ["correct answer", "wrong option 2", "wrong option 3", "wrong option 4"],
+      "explanation": "Why this is correct, with grammar rule reference"
     }
   ],
-  "toMemorize": ["Key thing 1 to memorize", "Key thing 2"],
-  "toUnderstand": ["Concept 1 to understand", "Concept 2"],
+  "fillInTheBlank": [
+    {
+      "sentence": "German sentence with ___ where the answer goes",
+      "answer": "The missing word",
+      "hint": "Grammar hint e.g. 'modal verb, 1st person singular'",
+      "explanation": "Why this is the correct word and what grammar rule applies"
+    }
+  ],
+  "toMemorize": ["Key vocabulary item or phrase to memorize", "..."],
+  "toUnderstand": ["Grammar concept to understand deeply", "..."],
   "homework": [
     {
-      "question": "Homework question text",
-      "hint": "A helpful hint without giving away the answer",
-      "answer": "The correct answer",
-      "explanation": "Full explanation of the answer and grammar used"
+      "question": "A practice question based on worksheet content",
+      "hint": "Helpful hint without giving the answer",
+      "answer": "Complete correct answer",
+      "explanation": "Full grammar explanation of why this is correct"
     }
   ]
 }

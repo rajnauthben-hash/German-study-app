@@ -1254,3 +1254,120 @@ textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
   .practice-bar { gap: 6px; }
   .practice-bar .btn { font-size: 12px; padding: 6px 10px; }
 }
+
+/* ── Today's Plan Cards ─────────────────────────────────────── */
+.plan-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: var(--shadow);
+}
+.plan-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+.plan-card.plan-urgent { border-color: var(--warning); background: var(--warning-light); }
+.plan-icon { font-size: 24px; flex-shrink: 0; }
+.plan-info { flex: 1; }
+.plan-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.plan-sub { font-size: 13px; color: var(--text-sec); margin-top: 2px; }
+.plan-arrow { font-size: 18px; color: var(--text-light); flex-shrink: 0; }
+
+/* ── Article Trainer ────────────────────────────────────────── */
+.article-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  padding: 32px 20px;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 20px;
+}
+.article-label { font-size: 13px; color: var(--text-light); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+.article-word { font-size: 40px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.article-hint-en { font-size: 16px; color: var(--text-sec); margin-bottom: 6px; }
+.article-source { font-size: 12px; color: var(--text-light); }
+.article-buttons { display: flex; gap: 12px; margin-bottom: 12px; }
+.article-btn {
+  flex: 1;
+  padding: 16px;
+  font-size: 20px;
+  font-weight: 800;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.article-btn:hover:not([disabled]) { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.art-der { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+.art-die { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
+.art-das { color: #16a34a; border-color: #bbf7d0; background: #f0fdf4; }
+.art-correct { border-color: var(--success) !important; background: var(--success-light) !important; color: var(--success) !important; }
+.art-incorrect { border-color: var(--error) !important; background: var(--error-light) !important; color: var(--error) !important; }
+.article-feedback {
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+.article-feedback.correct { background: var(--success-light); color: var(--success); }
+.article-feedback.incorrect { background: var(--error-light); color: var(--error); }
+.article-progress { display: flex; justify-content: space-between; margin-bottom: 8px; }
+
+/* ── Fill-in-the-Blank ──────────────────────────────────────── */
+.fib-sentence {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 12px 0 8px;
+  line-height: 1.6;
+}
+.fib-blank {
+  display: inline-block;
+  min-width: 80px;
+  border-bottom: 3px solid var(--primary);
+  color: var(--primary);
+  font-weight: 800;
+}
+.fib-hint-text { font-size: 13px; color: var(--text-sec); font-style: italic; margin-bottom: 16px; }
+.fib-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  outline: none;
+  margin-top: 8px;
+  transition: border-color 0.15s;
+}
+.fib-input:focus { border-color: var(--primary); }
+.fib-input.fib-correct { border-color: var(--success); background: var(--success-light); color: var(--success); }
+.fib-input.fib-incorrect { border-color: var(--error); background: var(--error-light); color: var(--error); }
+
+/* ── Mistake Bank ───────────────────────────────────────────── */
+.mistake-item {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  border-left: 4px solid var(--error);
+  box-shadow: var(--shadow);
+}
+.mistake-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.mistake-mode { font-size: 12px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.05em; }
+.mistake-date { font-size: 12px; color: var(--text-light); }
+.mistake-question { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 10px; line-height: 1.5; }
+.mistake-answer { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.mistake-wrong { font-size: 13px; color: var(--error); background: var(--error-light); padding: 4px 10px; border-radius: var(--radius-full); }
+.mistake-correct { font-size: 13px; color: var(--success); background: var(--success-light); padding: 4px 10px; border-radius: var(--radius-full); font-weight: 700; }
+.mistake-exp { font-size: 13px; color: var(--text-sec); margin-bottom: 10px; line-height: 1.5; font-style: italic; }
+.mistake-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-light); }
