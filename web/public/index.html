@@ -239,6 +239,8 @@ Du musst lernen. – You must study.
       <button class="btn btn-primary btn-sm" onclick="startFlashcards(state.currentSet?.id)">🃏 Flashcards</button>
       <button class="btn btn-secondary btn-sm" onclick="startQuiz(state.currentSet?.id)">✅ Quiz</button>
       <button class="btn btn-outline btn-sm" onclick="startFillInBlank(state.currentSet?.id)">✏️ Fill-in-blank</button>
+      <button class="btn btn-outline btn-sm" onclick="startSentenceBuilder(state.currentSet?.id)">🔀 Word Order</button>
+      <button class="btn btn-outline btn-sm" onclick="startTranslationPractice(state.currentSet?.id,'de-en')">🌐 Translate</button>
       <button class="btn btn-outline btn-sm" onclick="startHomework(state.currentSet?.id)">📝 Homework</button>
     </div>
 
@@ -591,6 +593,119 @@ Du musst lernen. – You must study.
       <button class="btn btn-outline" style="flex:1" onclick="startMistakeReview(true)">📚 Review All</button>
     </div>
     <div id="mb-list"></div>
+  </div>
+
+  <!-- ── SENTENCE BUILDER ──────────────────────────────────── -->
+  <div class="view" id="view-sentence-builder">
+    <div class="study-topbar">
+      <button class="back-btn" onclick="backToStudySet()">← Back</button>
+      <div class="study-topbar-info">
+        <div class="study-set-title">Word Order Trainer</div>
+        <div class="study-set-topic" id="sb-set-name"></div>
+      </div>
+    </div>
+
+    <div id="sb-active">
+      <div class="quiz-meta">
+        <span class="quiz-counter" id="sb-counter">1 / 5</span>
+        <span class="badge badge-primary" id="sb-score">✅ 0</span>
+      </div>
+      <div class="progress-bar-track" style="margin-bottom:20px">
+        <div class="progress-bar-fill" id="sb-progress-bar" style="width:0%"></div>
+      </div>
+
+      <div class="quiz-question-card">
+        <div class="quiz-q-label">Arrange the words in the correct order</div>
+        <div class="sb-english" id="sb-english"></div>
+      </div>
+
+      <div class="sb-zone">
+        <div class="sb-zone-label">Your sentence:</div>
+        <div class="sb-selected" id="sb-selected">
+          <span class="sb-placeholder">Tap words below to build the sentence…</span>
+        </div>
+      </div>
+
+      <div class="sb-zone">
+        <div class="sb-zone-label">Available words:</div>
+        <div class="sb-pool" id="sb-pool"></div>
+      </div>
+
+      <div class="quiz-feedback" id="sb-feedback" style="display:none">
+        <div class="quiz-feedback-title" id="sb-feedback-title"></div>
+        <div class="quiz-feedback-exp" id="sb-feedback-correct"></div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:16px">
+        <button class="btn btn-primary" id="sb-check-btn" onclick="checkSentence()" style="flex:1">Check Order</button>
+        <button class="btn btn-primary" id="sb-next-btn" onclick="sbNext()" style="display:none;flex:1">Next →</button>
+      </div>
+    </div>
+
+    <div id="sb-results" class="results-screen" style="display:none">
+      <div class="results-emoji" id="sb-result-emoji">⭐</div>
+      <div class="results-score" id="sb-result-score">0%</div>
+      <div class="results-label" id="sb-result-label">Keep going!</div>
+      <div class="results-sub" id="sb-result-sub"></div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="startSentenceBuilder(state.sb.setId)">Try Again</button>
+        <button class="btn btn-outline" onclick="backToStudySet()">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TRANSLATION PRACTICE ──────────────────────────────── -->
+  <div class="view" id="view-translation-practice">
+    <div class="study-topbar">
+      <button class="back-btn" onclick="backToStudySet()">← Back</button>
+      <div class="study-topbar-info">
+        <div class="study-set-title">Translation Practice</div>
+        <div class="study-set-topic" id="tp-set-name"></div>
+      </div>
+      <div class="badge badge-primary" id="tp-dir-label">🇩🇪 → 🇬🇧</div>
+    </div>
+
+    <div id="tp-active">
+      <div class="quiz-meta">
+        <span class="quiz-counter" id="tp-counter">1 / 8</span>
+        <span class="badge badge-primary" id="tp-score">✅ 0</span>
+      </div>
+      <div class="progress-bar-track" style="margin-bottom:20px">
+        <div class="progress-bar-fill" id="tp-progress-bar" style="width:0%"></div>
+      </div>
+
+      <div class="quiz-question-card">
+        <div class="quiz-q-label" id="tp-prompt-lang">🇩🇪 German</div>
+        <div class="quiz-q-text" id="tp-prompt"></div>
+        <div class="fib-hint-text" id="tp-hint" style="margin-top:8px"></div>
+      </div>
+
+      <input type="text" id="tp-input" class="fib-input" placeholder="Type your translation…"
+        autocomplete="off" autocorrect="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter')checkTranslation()">
+      <button class="btn btn-primary" id="tp-check-btn" onclick="checkTranslation()" style="width:100%;margin-top:12px">
+        Check Translation
+      </button>
+
+      <div class="quiz-feedback" id="tp-feedback" style="display:none">
+        <div class="quiz-feedback-title" id="tp-feedback-title"></div>
+        <div class="quiz-feedback-exp" id="tp-feedback-exp"></div>
+      </div>
+      <button class="btn btn-primary" id="tp-next-btn" onclick="tpNext()" style="display:none;width:100%;margin-top:12px">
+        Next →
+      </button>
+    </div>
+
+    <div id="tp-results" class="results-screen" style="display:none">
+      <div class="results-emoji" id="tp-result-emoji">⭐</div>
+      <div class="results-score" id="tp-result-score">0%</div>
+      <div class="results-label" id="tp-result-label">Keep going!</div>
+      <div class="results-sub" id="tp-result-sub"></div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="startTranslationPractice(state.tp.setId, state.tp.direction)">Try Again</button>
+        <button class="btn btn-outline" onclick="backToStudySet()">Back</button>
+      </div>
+    </div>
   </div>
 
 </main><!-- /main-content -->

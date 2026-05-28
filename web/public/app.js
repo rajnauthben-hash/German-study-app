@@ -56,6 +56,12 @@ let state = {
   // Article trainer
   article: { nouns: [], index: 0, score: 0, total: 0, answered: false },
 
+  // Sentence builder (word order)
+  sb: { sentences: [], index: 0, score: 0, selected: [], pool: [], answered: false, setId: null },
+
+  // Translation practice
+  tp: { items: [], index: 0, score: 0, answered: false, direction: 'de-en', setId: null },
+
   // Mistake review
   mr: { items: [], index: 0, correct: 0, answered: false },
 
@@ -220,6 +226,8 @@ function showView(name) {
     'create': initCreate,
     'article-trainer': initArticleTrainer,
     'mistake-bank': initMistakeBankView,
+    'sentence-builder': () => {},
+    'translation-practice': () => {},
   };
   if (viewInits[name]) viewInits[name]();
 }
@@ -2174,6 +2182,268 @@ function resolveMistake(id) {
   if (m) { m.resolved = true; saveMistakes(mistakes); }
   initMistakeBankView();
   showToast('Marked as resolved.', 'success');
+}
+
+// ─── Sentence Builder (Word Order Trainer) ────────────────────────────────────
+
+function startSentenceBuilder(setId) {
+  const sets = getSets();
+  const set = sets.find(s => s.id === setId) || state.currentSet;
+  if (!set) { showToast('Study set not found.', 'error'); return; }
+
+  const sentences = (set.exampleSentences || []).filter(s => s.german && s.german.split(' ').length >= 3);
+  if (sentences.length === 0) {
+    showToast('Not enough sentences in this set for word-order practice.', 'warning');
+    return;
+  }
+
+  state.currentSet = set;
+  state.sb = { sentences: shuffle([...sentences]), index: 0, score: 0, selected: [], pool: [], answered: false, setId: set.id };
+
+  document.getElementById('sb-set-name').textContent = set.title;
+  document.getElementById('sb-active').style.display = '';
+  document.getElementById('sb-results').style.display = 'none';
+
+  renderSbCard();
+  showView('sentence-builder');
+  updateStreak();
+}
+
+function renderSbCard() {
+  const { sentences, index, score } = state.sb;
+  const s = sentences[index];
+
+  document.getElementById('sb-counter').textContent = `${index + 1} / ${sentences.length}`;
+  document.getElementById('sb-score').textContent = `✅ ${score}`;
+  document.getElementById('sb-progress-bar').style.width = `${(index / sentences.length) * 100}%`;
+  document.getElementById('sb-english').textContent = s.english ? `🇬🇧 ${s.english}` : '';
+  document.getElementById('sb-feedback').style.display = 'none';
+  document.getElementById('sb-check-btn').style.display = '';
+  document.getElementById('sb-next-btn').style.display = 'none';
+  state.sb.answered = false;
+
+  // Split into words, keep punctuation attached to words
+  const words = s.german.split(/\s+/).filter(Boolean);
+  state.sb.pool = shuffle(words.map((w, i) => ({ word: w, id: `w${i}` })));
+  state.sb.selected = [];
+
+  renderSbWords();
+}
+
+function renderSbWords() {
+  const { pool, selected } = state.sb;
+
+  document.getElementById('sb-selected').innerHTML = selected.length
+    ? selected.map(w => `<button class="sb-word sb-word-selected" onclick="sbRemoveWord('${w.id}')">${esc(w.word)}</button>`).join('')
+    : '<span class="sb-placeholder">Tap words below to build the sentence</span>';
+
+  document.getElementById('sb-pool').innerHTML = pool
+    .filter(w => !selected.find(s => s.id === w.id))
+    .map(w => `<button class="sb-word" onclick="sbAddWord('${w.id}')">${esc(w.word)}</button>`)
+    .join('');
+}
+
+function sbAddWord(id) {
+  if (state.sb.answered) return;
+  const wordObj = state.sb.pool.find(w => w.id === id);
+  if (wordObj && !state.sb.selected.find(s => s.id === id)) {
+    state.sb.selected.push(wordObj);
+    renderSbWords();
+  }
+}
+
+function sbRemoveWord(id) {
+  if (state.sb.answered) return;
+  state.sb.selected = state.sb.selected.filter(w => w.id !== id);
+  renderSbWords();
+}
+
+function checkSentence() {
+  if (state.sb.answered) return;
+  const { sentences, index, selected } = state.sb;
+
+  if (selected.length === 0) { showToast('Tap some words first!', 'warning'); return; }
+
+  state.sb.answered = true;
+  const original = sentences[index].german.trim();
+  const attempt = selected.map(w => w.word).join(' ');
+  const isCorrect = normalizeAnswer(attempt) === normalizeAnswer(original);
+
+  if (isCorrect) state.sb.score++;
+  else {
+    recordMistake({
+      question: `Put in order: ${sentences[index].english || original}`,
+      myAnswer: attempt,
+      correct: original,
+      explanation: '',
+      topic: state.currentSet?.title || '',
+      setId: state.sb.setId,
+      setTitle: state.currentSet?.title || '',
+      mode: 'sentence-builder',
+    });
+  }
+
+  const fb = document.getElementById('sb-feedback');
+  fb.style.display = '';
+  fb.className = `quiz-feedback ${isCorrect ? 'correct' : 'incorrect'}`;
+  document.getElementById('sb-feedback-title').textContent = isCorrect ? '✅ Correct!' : `❌ Correct order:`;
+  document.getElementById('sb-feedback-correct').textContent = isCorrect ? '' : original;
+
+  // Highlight selected words
+  document.querySelectorAll('.sb-word-selected').forEach(b => {
+    b.classList.toggle('sb-correct', isCorrect);
+    b.classList.toggle('sb-incorrect', !isCorrect);
+    b.disabled = true;
+  });
+
+  const nextBtn = document.getElementById('sb-next-btn');
+  nextBtn.textContent = state.sb.index + 1 >= state.sb.sentences.length ? 'See Results 🎉' : 'Next →';
+  nextBtn.style.display = '';
+  document.getElementById('sb-check-btn').style.display = 'none';
+}
+
+function sbNext() {
+  const { sentences, index, score } = state.sb;
+  if (index + 1 >= sentences.length) {
+    const pct = Math.round((score / sentences.length) * 100);
+    const info = getScoreInfo(pct);
+    document.getElementById('sb-active').style.display = 'none';
+    document.getElementById('sb-results').style.display = '';
+    document.getElementById('sb-result-emoji').textContent = info.emoji;
+    document.getElementById('sb-result-score').textContent = `${pct}%`;
+    document.getElementById('sb-result-label').textContent = info.label;
+    document.getElementById('sb-result-sub').textContent = `${score} / ${sentences.length} correct`;
+    addHistoryEntry({ date: new Date().toISOString(), setId: state.sb.setId, setTitle: state.currentSet?.title || '', mode: 'sentence-builder', score: pct, wordsStudied: sentences.length });
+  } else {
+    state.sb.index++;
+    renderSbCard();
+  }
+}
+
+// ─── Translation Practice ──────────────────────────────────────────────────────
+
+function startTranslationPractice(setId, direction) {
+  const sets = getSets();
+  const set = sets.find(s => s.id === setId) || state.currentSet;
+  if (!set) { showToast('Study set not found.', 'error'); return; }
+
+  // Build items from vocabulary + example sentences
+  const vocabItems = (set.vocabulary || []).filter(v => v.german && v.english).map(v => ({
+    prompt: direction === 'en-de' ? v.english : `${v.article ? v.article + ' ' : ''}${v.german}`,
+    answer: direction === 'en-de' ? v.german : v.english,
+    type: 'vocab',
+    hint: v.wordType || '',
+    example: v.example || '',
+  }));
+
+  const sentenceItems = (set.exampleSentences || []).filter(s => s.german && s.english).map(s => ({
+    prompt: direction === 'en-de' ? s.english : s.german,
+    answer: direction === 'en-de' ? s.german : s.english,
+    type: 'sentence',
+    hint: '',
+    example: '',
+  }));
+
+  const items = shuffle([...vocabItems, ...sentenceItems.slice(0, 5)]);
+
+  if (items.length === 0) {
+    showToast('Not enough vocabulary for translation practice.', 'warning');
+    return;
+  }
+
+  state.currentSet = set;
+  state.tp = { items, index: 0, score: 0, answered: false, direction: direction || 'de-en', setId: set.id };
+
+  document.getElementById('tp-set-name').textContent = set.title;
+  document.getElementById('tp-dir-label').textContent = direction === 'en-de' ? '🇬🇧 → 🇩🇪' : '🇩🇪 → 🇬🇧';
+  document.getElementById('tp-active').style.display = '';
+  document.getElementById('tp-results').style.display = 'none';
+
+  renderTpCard();
+  showView('translation-practice');
+  updateStreak();
+}
+
+function renderTpCard() {
+  const { items, index, score, direction } = state.tp;
+  const item = items[index];
+
+  document.getElementById('tp-counter').textContent = `${index + 1} / ${items.length}`;
+  document.getElementById('tp-score').textContent = `✅ ${score}`;
+  document.getElementById('tp-progress-bar').style.width = `${(index / items.length) * 100}%`;
+  document.getElementById('tp-prompt').textContent = item.prompt;
+  document.getElementById('tp-prompt-lang').textContent = direction === 'en-de' ? '🇬🇧 English' : '🇩🇪 German';
+  document.getElementById('tp-hint').textContent = item.hint ? `(${item.hint})` : '';
+  document.getElementById('tp-input').value = '';
+  document.getElementById('tp-input').disabled = false;
+  document.getElementById('tp-input').classList.remove('fib-correct', 'fib-incorrect');
+  document.getElementById('tp-feedback').style.display = 'none';
+  document.getElementById('tp-check-btn').style.display = '';
+  document.getElementById('tp-next-btn').style.display = 'none';
+  state.tp.answered = false;
+  setTimeout(() => document.getElementById('tp-input')?.focus(), 100);
+}
+
+function checkTranslation() {
+  if (state.tp.answered) return;
+  state.tp.answered = true;
+
+  const { items, index } = state.tp;
+  const item = items[index];
+  const userAns = document.getElementById('tp-input').value.trim();
+  const correct = item.answer;
+
+  // Flexible matching: accept if user answer contains the core answer words
+  const isCorrect = normalizeAnswer(userAns) === normalizeAnswer(correct);
+  const isClose = !isCorrect && correct.toLowerCase().includes(normalizeAnswer(userAns)) && userAns.length > 2;
+
+  document.getElementById('tp-input').disabled = true;
+  document.getElementById('tp-check-btn').style.display = 'none';
+
+  if (isCorrect || isClose) {
+    state.tp.score++;
+    document.getElementById('tp-input').classList.add('fib-correct');
+  } else {
+    document.getElementById('tp-input').classList.add('fib-incorrect');
+    recordMistake({
+      question: `Translate: "${item.prompt}"`,
+      myAnswer: userAns,
+      correct,
+      explanation: item.example ? `Example: ${item.example}` : '',
+      topic: state.currentSet?.title || '',
+      setId: state.tp.setId,
+      setTitle: state.currentSet?.title || '',
+      mode: 'translation',
+    });
+  }
+
+  const fb = document.getElementById('tp-feedback');
+  fb.className = `quiz-feedback ${(isCorrect || isClose) ? 'correct' : 'incorrect'}`;
+  fb.style.display = '';
+  document.getElementById('tp-feedback-title').textContent = isCorrect ? '✅ Perfect!' : isClose ? '✅ Close enough!' : `❌ Answer: ${correct}`;
+  document.getElementById('tp-feedback-exp').textContent = item.example || '';
+
+  const nextBtn = document.getElementById('tp-next-btn');
+  nextBtn.textContent = index + 1 >= items.length ? 'See Results 🎉' : 'Next →';
+  nextBtn.style.display = '';
+}
+
+function tpNext() {
+  const { items, index, score, setId, direction } = state.tp;
+  if (index + 1 >= items.length) {
+    const pct = Math.round((score / items.length) * 100);
+    const info = getScoreInfo(pct);
+    document.getElementById('tp-active').style.display = 'none';
+    document.getElementById('tp-results').style.display = '';
+    document.getElementById('tp-result-emoji').textContent = info.emoji;
+    document.getElementById('tp-result-score').textContent = `${pct}%`;
+    document.getElementById('tp-result-label').textContent = info.label;
+    document.getElementById('tp-result-sub').textContent = `${score} / ${items.length} correct`;
+    addHistoryEntry({ date: new Date().toISOString(), setId, setTitle: state.currentSet?.title || '', mode: 'translation', score: pct, wordsStudied: items.length });
+  } else {
+    state.tp.index++;
+    renderTpCard();
+  }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
