@@ -1250,9 +1250,22 @@ textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
   .loading-card { padding: 28px 24px; }
 }
 
-@media (max-width: 400px) {
-  .practice-bar { gap: 6px; }
-  .practice-bar .btn { font-size: 12px; padding: 6px 10px; }
+@media (max-width: 480px) {
+  .practice-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .practice-bar .btn {
+    font-size: 13px;
+    padding: 10px 8px;
+    text-align: center;
+    min-height: 44px;
+    width: 100%;
+  }
+}
+@media (max-width: 768px) {
+  .btn-sm { min-height: 40px; padding: 8px 14px; }
 }
 
 /* ── Today's Plan Cards ─────────────────────────────────────── */
@@ -1276,6 +1289,34 @@ textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
 .plan-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .plan-sub { font-size: 13px; color: var(--text-sec); margin-top: 2px; }
 .plan-arrow { font-size: 18px; color: var(--text-light); flex-shrink: 0; }
+
+.goal-bar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.goal-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.rusty-badge {
+  display: inline-block;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  vertical-align: middle;
+  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 /* ── Article Trainer ────────────────────────────────────────── */
 .article-card {

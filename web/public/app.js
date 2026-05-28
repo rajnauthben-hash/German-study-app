@@ -141,6 +141,44 @@ function updateStreak() {
   document.getElementById('streak-badge').textContent = `🔥 ${p.streak}`;
 }
 
+function getMasteredWords() {
+  try { return JSON.parse(localStorage.getItem('ds_masteredWords') || '[]'); } catch { return []; }
+}
+function saveMasteredWords(words) {
+  localStorage.setItem('ds_masteredWords', JSON.stringify(words));
+}
+function markWordMastered(setId, german) {
+  const key = `${setId}:${german}`;
+  const words = getMasteredWords();
+  if (!words.includes(key)) {
+    words.push(key);
+    saveMasteredWords(words);
+  }
+}
+
+function getTodayWords() {
+  try {
+    const data = JSON.parse(localStorage.getItem('ds_wordsToday') || '{}');
+    return data.date === new Date().toDateString() ? (data.count || 0) : 0;
+  } catch { return 0; }
+}
+function incrementTodayWords() {
+  try {
+    const today = new Date().toDateString();
+    const data = JSON.parse(localStorage.getItem('ds_wordsToday') || '{}');
+    const count = (data.date === today ? (data.count || 0) : 0) + 1;
+    localStorage.setItem('ds_wordsToday', JSON.stringify({ date: today, count }));
+  } catch {}
+}
+
+function displayMastery(set) {
+  const base = set.masteryLevel || 0;
+  if (!set.lastStudied || base === 0) return base;
+  const daysSince = Math.floor((Date.now() - new Date(set.lastStudied).getTime()) / 86400000);
+  const decay = Math.max(0, Math.floor(daysSince / 7) * 8);
+  return Math.max(base - decay, Math.floor(base * 0.4));
+}
+
 // ─── Mistake Bank ─────────────────────────────────────────────────────────────
 
 function getMistakes() {
@@ -260,7 +298,7 @@ function initDashboard() {
   // Stats
   document.getElementById('stat-streak').textContent = p.streak || 0;
   document.getElementById('stat-sets').textContent = sets.length;
-  document.getElementById('stat-words').textContent = p.totalWords || 0;
+  document.getElementById('stat-words').textContent = getMasteredWords().length;
   document.getElementById('stat-mistakes').textContent = allMistakes.length;
   document.getElementById('streak-badge').textContent = `🔥 ${p.streak || 0}`;
 
@@ -268,6 +306,21 @@ function initDashboard() {
   const planEl = document.getElementById('dash-daily-plan');
   if (planEl) {
     const planCards = [];
+
+    // Daily goal progress
+    const goalWords = settings.dailyGoal || 15;
+    const todayWords = getTodayWords();
+    const goalPct = Math.min(100, Math.round((todayWords / goalWords) * 100));
+    planCards.push(`
+      <div class="plan-card">
+        <div class="plan-icon">${todayWords >= goalWords ? '🎉' : '🎯'}</div>
+        <div class="plan-info">
+          <div class="plan-title">${todayWords >= goalWords ? 'Daily goal complete!' : `Today: ${todayWords} / ${goalWords} words`}</div>
+          <div class="plan-sub">
+            <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${goalPct}%"></div></div>
+          </div>
+        </div>
+      </div>`);
 
     if (dueMistakes.length > 0) {
       planCards.push(`
@@ -290,7 +343,7 @@ function initDashboard() {
           <div class="plan-icon">📖</div>
           <div class="plan-info">
             <div class="plan-title">${esc(lastSet.title)}</div>
-            <div class="plan-sub">Mastery ${lastSet.masteryLevel || 0}% · ${formatDate(lastSet.lastStudied)}</div>
+            <div class="plan-sub">Mastery ${displayMastery(lastSet)}% · ${formatDate(lastSet.lastStudied)}</div>
           </div>
           <span class="plan-arrow">→</span>
         </div>`);
@@ -622,7 +675,6 @@ async function generateStudySet() {
 
     const p = getProgress();
     p.totalScans = (p.totalScans || 0) + 1;
-    p.totalWords = (p.totalWords || 0) + (data.vocabulary?.length || 0);
     saveProgress(p);
 
     btn.disabled = false;
@@ -732,7 +784,8 @@ function initSavedSets() {
 }
 
 function renderSetCard(set) {
-  const mastery = set.masteryLevel || 0;
+  const mastery = displayMastery(set);
+  const isRusty = mastery < (set.masteryLevel || 0) - 15;
   const color = mastery >= 80 ? 'var(--success)' : mastery >= 50 ? 'var(--warning)' : 'var(--primary)';
   const lastStudied = set.lastStudied ? formatDate(set.lastStudied) : 'Not studied yet';
   const vocabCount = (set.vocabulary || []).length;
@@ -748,7 +801,7 @@ function renderSetCard(set) {
         </div>
       </div>
       <div class="progress-label">
-        <span>Mastery</span>
+        <span>Mastery${isRusty ? ' <span class="rusty-badge">needs review</span>' : ''}</span>
         <span style="color:${color};font-weight:700">${mastery}%</span>
       </div>
       <div class="progress-bar-track" style="margin-bottom:10px">
@@ -1026,6 +1079,8 @@ function markCard(knewIt) {
   const card = cards[index];
   if (knewIt) {
     state.fc.known.push(card.id || card.german);
+    markWordMastered(state.fc.setId, card.german);
+    incrementTodayWords();
   } else {
     state.fc.needsWork.push(card.id || card.german);
     recordMistake({
@@ -1069,11 +1124,7 @@ function showFlashcardResults() {
     state.currentSet = set;
   }
 
-  // Progress
-  const p = getProgress();
-  p.totalWords = (p.totalWords || 0) + known.length;
   addHistoryEntry({ date: new Date().toISOString(), setId, setTitle: state.currentSet?.title || '', mode: 'flashcards', score, wordsStudied: cards.length });
-  saveProgress(p);
 }
 
 function restartFlashcards() {
@@ -1172,7 +1223,8 @@ function selectOption(el) {
   const correct = optionsEl.dataset.correct;
   const explanation = optionsEl.dataset.explanation || '';
 
-  const isCorrect = normalizeAnswer(selected) === normalizeAnswer(correct);
+  const quizMatch = isAnswerAccepted(selected, correct);
+  const isCorrect = !!quizMatch;
 
   document.querySelectorAll('.quiz-option').forEach(b => {
     b.disabled = true;
@@ -1201,7 +1253,7 @@ function selectOption(el) {
   const fb = document.getElementById('quiz-feedback');
   fb.className = `quiz-feedback ${isCorrect ? 'correct' : 'incorrect'}`;
   fb.style.display = '';
-  document.getElementById('quiz-feedback-title').textContent = isCorrect ? '✅ Correct!' : `❌ The answer is: ${correct}`;
+  document.getElementById('quiz-feedback-title').textContent = isCorrect && quizMatch === 'close' ? '✅ Close enough!' : isCorrect ? '✅ Correct!' : `❌ The answer is: ${correct}`;
   document.getElementById('quiz-feedback-exp').textContent = explanation || '';
 
   const nextBtn = document.getElementById('quiz-next-btn');
@@ -1423,6 +1475,28 @@ function searchVocab(query) {
 
 // ─── Verb Trainer ─────────────────────────────────────────────────────────────
 
+function getVerbList() {
+  const fromSets = [];
+  getSets().forEach(set => {
+    (set.vocabulary || []).forEach(v => {
+      const type = (v.wordType || '').toLowerCase();
+      if ((type === 'verb' || type === 'modal') &&
+          !COMMON_VERBS.some(cv => cv.infinitive.toLowerCase() === v.german.toLowerCase()) &&
+          !fromSets.some(fv => fv.infinitive.toLowerCase() === v.german.toLowerCase())) {
+        fromSets.push({
+          infinitive: v.german,
+          english: v.english,
+          conjugations: null,
+          regular: null,
+          example: v.example || '',
+          fromSet: set.title,
+        });
+      }
+    });
+  });
+  return [...COMMON_VERBS, ...fromSets];
+}
+
 function initVerbTrainer() {
   state.verbIndex = 0;
   state.verbMode = 'browse';
@@ -1443,12 +1517,29 @@ function setVerbMode(mode) {
 }
 
 function renderVerb() {
-  const verb = COMMON_VERBS[state.verbIndex];
-  document.getElementById('verb-nav-counter').textContent = `${state.verbIndex + 1} / ${COMMON_VERBS.length}`;
+  const verbs = getVerbList();
+  const verb = verbs[state.verbIndex];
+  document.getElementById('verb-nav-counter').textContent = `${state.verbIndex + 1} / ${verbs.length}`;
   document.getElementById('verb-prev-btn').disabled = state.verbIndex === 0;
-  document.getElementById('verb-next-btn').disabled = state.verbIndex === COMMON_VERBS.length - 1;
+  document.getElementById('verb-next-btn').disabled = state.verbIndex === verbs.length - 1;
 
   const cardArea = document.getElementById('verb-card-area');
+
+  // Verbs without conjugation tables (imported from study sets)
+  if (!verb.conjugations) {
+    const fromLabel = verb.fromSet ? `<div style="font-size:12px;color:var(--text-light);margin-top:4px">from: ${esc(verb.fromSet)}</div>` : '';
+    cardArea.innerHTML = `
+      <div class="verb-card">
+        <div class="verb-infinitive">${esc(verb.infinitive)}</div>
+        <div class="verb-english">${esc(verb.english)}</div>
+        ${fromLabel}
+        <div style="margin-top:16px;padding:16px;background:var(--bg);border-radius:var(--radius);color:var(--text-light);font-size:13px;text-align:center">
+          Conjugation table not available — study set verbs don't include full conjugations.
+        </div>
+        ${verb.example ? `<div class="verb-example">💬 ${esc(verb.example)}</div>` : ''}
+      </div>`;
+    return;
+  }
 
   const typeClass = verb.regular ? 'verb-type-regular' : 'verb-type-irregular';
   const typeLabel = verb.regular ? '✅ Regular' : '⚡ Irregular';
@@ -1521,8 +1612,8 @@ function renderVerb() {
 function checkVerbAnswers() {
   state.verbRevealed = true;
   renderVerb();
-  // Score feedback
-  const verb = COMMON_VERBS[state.verbIndex];
+  const verb = getVerbList()[state.verbIndex];
+  if (!verb.conjugations) return;
   let correct = 0;
   PRONOUNS.forEach(p => {
     if ((state.verbAnswers[p] || '').trim().toLowerCase() === verb.conjugations[p].toLowerCase()) correct++;
@@ -1537,7 +1628,7 @@ function resetVerbPractice() {
 }
 
 function nextVerb() {
-  if (state.verbIndex < COMMON_VERBS.length - 1) {
+  if (state.verbIndex < getVerbList().length - 1) {
     state.verbIndex++;
     state.verbAnswers = {};
     state.verbRevealed = false;
@@ -1702,6 +1793,8 @@ function resetAllData() {
   localStorage.removeItem('ds_progress');
   localStorage.removeItem('ds_settings');
   localStorage.removeItem('ds_mistakes');
+  localStorage.removeItem('ds_masteredWords');
+  localStorage.removeItem('ds_wordsToday');
   state.currentSet = null;
   showToast('All data reset.', 'success');
   showView('dashboard');
@@ -1750,7 +1843,33 @@ function getScoreInfo(score) {
 }
 
 function normalizeAnswer(s) {
-  return String(s).toLowerCase().trim().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ');
+  return String(s)
+    .toLowerCase().trim()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[.,!?;:'"()]/g, '').replace(/\s+/g, ' ');
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => Array(n + 1).fill(0).map((__, j) => j === 0 ? i : 0));
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function isAnswerAccepted(userAns, correct) {
+  const u = normalizeAnswer(userAns);
+  const c = normalizeAnswer(correct);
+  if (!u) return false;
+  if (u === c) return 'exact';
+  if (u.length >= 3 && levenshtein(u, c) <= 1) return 'close';
+  return false;
 }
 
 function shuffle(arr) {
@@ -1953,7 +2072,8 @@ function checkFibAnswer() {
   const q = items[index];
   const userAnswer = document.getElementById('fib-input').value.trim();
   const correct = q.answer || '';
-  const isRight = normalizeAnswer(userAnswer) === normalizeAnswer(correct);
+  const fibMatch = isAnswerAccepted(userAnswer, correct);
+  const isRight = !!fibMatch;
 
   document.getElementById('fib-input').disabled = true;
   document.getElementById('fib-check-btn').style.display = 'none';
@@ -1978,7 +2098,7 @@ function checkFibAnswer() {
   const fb = document.getElementById('fib-feedback');
   fb.className = `quiz-feedback ${isRight ? 'correct' : 'incorrect'}`;
   fb.style.display = '';
-  document.getElementById('fib-feedback-title').textContent = isRight ? '✅ Correct!' : `❌ Answer: ${correct}`;
+  document.getElementById('fib-feedback-title').textContent = isRight && fibMatch === 'close' ? '✅ Close enough!' : isRight ? '✅ Correct!' : `❌ Answer: ${correct}`;
   document.getElementById('fib-feedback-exp').textContent = q.explanation || '';
 
   const nextBtn = document.getElementById('fib-next-btn');
@@ -2393,9 +2513,9 @@ function checkTranslation() {
   const userAns = document.getElementById('tp-input').value.trim();
   const correct = item.answer;
 
-  // Flexible matching: accept if user answer contains the core answer words
-  const isCorrect = normalizeAnswer(userAns) === normalizeAnswer(correct);
-  const isClose = !isCorrect && correct.toLowerCase().includes(normalizeAnswer(userAns)) && userAns.length > 2;
+  const tpMatch = isAnswerAccepted(userAns, correct);
+  const isCorrect = tpMatch === 'exact';
+  const isClose = tpMatch === 'close';
 
   document.getElementById('tp-input').disabled = true;
   document.getElementById('tp-check-btn').style.display = 'none';
