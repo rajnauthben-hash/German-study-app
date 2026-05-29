@@ -1483,7 +1483,7 @@ function renderVocabBank() {
           <div class="vbc-english">${esc(v.english)}</div>
           <div class="vbc-set">from: ${esc(v.setTitle)}</div>
         </div>
-        <button class="speak-btn" onclick="speakGerman(${JSON.stringify(v.german)})" title="Listen">🔊</button>
+        <button class="speak-btn" data-word="${esc(v.german)}" onclick="speakGerman(this.dataset.word)" title="Listen">🔊</button>
       </div>`;
   }).join('');
 }
