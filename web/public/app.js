@@ -101,7 +101,7 @@ function saveProgress(p) {
 
 function getSettings() {
   // Default apiUrl to same origin so it works on Replit, localhost, anywhere
-  const defaults = { name: 'Student', level: 'A2', apiUrl: window.location.origin, dailyGoal: 15 };
+  const defaults = { name: 'Student', level: 'A2', apiUrl: window.location.origin, dailyGoal: 15, audioEnabled: true };
   try {
     const saved = JSON.parse(localStorage.getItem('ds_settings') || '{}');
     // If saved URL is localhost but we're not on localhost, reset it to current origin
@@ -133,9 +133,13 @@ function updateStreak() {
   } else if (last === yesterday) {
     p.streak = (p.streak || 0) + 1;
     p.lastStudyDate = new Date().toISOString();
+    addXP(20);
+    checkBadgeTrigger('streak_update', { streak: p.streak });
   } else {
     p.streak = 1;
     p.lastStudyDate = new Date().toISOString();
+    addXP(20);
+    checkBadgeTrigger('streak_update', { streak: p.streak });
   }
   saveProgress(p);
   document.getElementById('streak-badge').textContent = `🔥 ${p.streak}`;
@@ -264,6 +268,7 @@ function showView(name) {
     'create': initCreate,
     'article-trainer': initArticleTrainer,
     'mistake-bank': initMistakeBankView,
+    'badges': renderBadgesView,
     'sentence-builder': () => {},
     'translation-practice': () => {},
   };
@@ -273,11 +278,13 @@ function showView(name) {
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sidebar-overlay').classList.add('active');
+  document.getElementById('hamburger-btn').classList.add('open');
 }
 
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('active');
+  document.getElementById('hamburger-btn').classList.remove('open');
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -632,6 +639,7 @@ async function generateStudySet() {
 
       showToast('Generated using offline mode (connect backend for AI).', 'warning');
       openStudySet(set.id);
+      checkBadgeTrigger('set_created', {});
       return;
     }
 
@@ -661,6 +669,7 @@ async function generateStudySet() {
 
       showToast('AI could not read the text clearly. Try typing it manually for best results.', 'warning');
       openStudySet(set.id);
+      checkBadgeTrigger('set_created', {});
       return;
     }
 
@@ -683,6 +692,7 @@ async function generateStudySet() {
 
     showToast('Study set created! ✨', 'success');
     openStudySet(data.id);
+    checkBadgeTrigger('set_created', {});
 
   } catch (err) {
     hideLoading();
@@ -1045,6 +1055,7 @@ function startFlashcards(setId) {
   renderFlashcard();
   showView('flashcards');
   updateStreak();
+  checkBadgeTrigger('mode_used', { mode: 'flashcards' });
 }
 
 function renderFlashcard() {
@@ -1072,6 +1083,10 @@ function renderFlashcard() {
 function flipCard() {
   state.fc.flipped = !state.fc.flipped;
   document.getElementById('flashcard').classList.toggle('flipped', state.fc.flipped);
+  if (state.fc.flipped) {
+    const card = state.fc.cards[state.fc.index];
+    if (card) speakGerman(card.german);
+  }
 }
 
 function markCard(knewIt) {
@@ -1081,6 +1096,8 @@ function markCard(knewIt) {
     state.fc.known.push(card.id || card.german);
     markWordMastered(state.fc.setId, card.german);
     incrementTodayWords();
+    addXP(5);
+    checkBadgeTrigger('word_mastered', { count: getMasteredWords().length });
   } else {
     state.fc.needsWork.push(card.id || card.german);
     recordMistake({
@@ -1125,6 +1142,10 @@ function showFlashcardResults() {
   }
 
   addHistoryEntry({ date: new Date().toISOString(), setId, setTitle: state.currentSet?.title || '', mode: 'flashcards', score, wordsStudied: cards.length });
+  if (score === 100) {
+    triggerConfetti();
+    checkBadgeTrigger('fc_complete', { wrong: 0 });
+  }
 }
 
 function restartFlashcards() {
@@ -1170,6 +1191,7 @@ function startQuiz(setId) {
   renderQuizQuestion();
   showView('quiz');
   updateStreak();
+  checkBadgeTrigger('mode_used', { mode: 'quiz' });
 }
 
 function buildVocabQuiz(vocab) {
@@ -1248,6 +1270,7 @@ function selectOption(el) {
     });
   } else {
     state.quiz.score++;
+    addXP(10);
   }
 
   const fb = document.getElementById('quiz-feedback');
@@ -1312,6 +1335,8 @@ function showQuizResults() {
   p.totalQuestions = (p.totalQuestions || 0) + questions.length;
   addHistoryEntry({ date: new Date().toISOString(), setId, setTitle: state.currentSet?.title || '', mode: 'quiz', score: finalScore, wordsStudied: questions.length });
   saveProgress(p);
+  checkBadgeTrigger('quiz_complete', { score: finalScore });
+  if (finalScore === 100) triggerConfetti();
 }
 
 function restartQuiz() {
@@ -1359,6 +1384,7 @@ function startHomework(setId) {
   showView('homework');
   updateStreak();
   addHistoryEntry({ date: new Date().toISOString(), setId: set.id, setTitle: set.title, mode: 'homework', score: null, wordsStudied: set.homework.length });
+  checkBadgeTrigger('mode_used', { mode: 'homework' });
 }
 
 function revealHint(i) {
@@ -1457,6 +1483,7 @@ function renderVocabBank() {
           <div class="vbc-english">${esc(v.english)}</div>
           <div class="vbc-set">from: ${esc(v.setTitle)}</div>
         </div>
+        <button class="speak-btn" onclick="speakGerman(${JSON.stringify(v.german)})" title="Listen">🔊</button>
       </div>`;
   }).join('');
 }
@@ -1752,15 +1779,19 @@ function initSettings() {
   document.getElementById('settings-level').value = s.level || 'A2';
   document.getElementById('settings-api-url').value = s.apiUrl || window.location.origin;
   document.getElementById('settings-goal').value = s.dailyGoal || 15;
+  const audioEl = document.getElementById('settings-audio');
+  if (audioEl) audioEl.checked = s.audioEnabled !== false;
   document.getElementById('api-connection-status').textContent = '';
 }
 
 function saveSettingsForm() {
+  const audioEl = document.getElementById('settings-audio');
   const s = {
     name: document.getElementById('settings-name').value.trim() || 'Student',
     level: document.getElementById('settings-level').value,
     apiUrl: (document.getElementById('settings-api-url').value.trim() || window.location.origin).replace(/\/$/, ''),
     dailyGoal: parseInt(document.getElementById('settings-goal').value) || 15,
+    audioEnabled: audioEl ? audioEl.checked : true,
   };
   saveSettings(s);
   showToast('Settings saved! ✅', 'success');
@@ -1795,6 +1826,11 @@ function resetAllData() {
   localStorage.removeItem('ds_mistakes');
   localStorage.removeItem('ds_masteredWords');
   localStorage.removeItem('ds_wordsToday');
+  localStorage.removeItem('ds_xp');
+  localStorage.removeItem('ds_badges');
+  localStorage.removeItem('ds_welcomed');
+  localStorage.removeItem('ds_modes_used');
+  localStorage.removeItem('ds_art_correct');
   state.currentSet = null;
   showToast('All data reset.', 'success');
   showView('dashboard');
@@ -1924,6 +1960,7 @@ function initArticleTrainer() {
 
   state.article = { nouns: shuffle(allNouns), index: 0, score: 0, total: 0, answered: false };
   renderArticleCard();
+  checkBadgeTrigger('mode_used', { mode: 'article-trainer' });
 }
 
 function renderArticleCard() {
@@ -1982,8 +2019,11 @@ function checkArticle(chosen) {
   const correct = (noun.article || '').toLowerCase().trim();
   const isRight = chosen === correct;
 
-  if (isRight) state.article.score++;
-  else {
+  if (isRight) {
+    state.article.score++;
+    addXP(5);
+    checkBadgeTrigger('article_correct', {});
+  } else {
     recordMistake({
       question: `What is the article for "${noun.german}"?`,
       myAnswer: chosen,
@@ -2042,6 +2082,7 @@ function startFillInBlank(setId) {
   renderFibQuestion();
   showView('fill-in-blank');
   updateStreak();
+  checkBadgeTrigger('mode_used', { mode: 'fill-in-blank' });
 }
 
 function renderFibQuestion() {
@@ -2080,6 +2121,7 @@ function checkFibAnswer() {
 
   if (isRight) {
     state.fib.score++;
+    addXP(10);
     document.getElementById('fib-input').classList.add('fib-correct');
   } else {
     document.getElementById('fib-input').classList.add('fib-incorrect');
@@ -2144,6 +2186,7 @@ function startMistakeReview(reviewAll = false) {
 
   renderMistakeCard();
   showView('mistake-review');
+  checkBadgeTrigger('mode_used', { mode: 'mistake-review' });
 }
 
 function renderMistakeCard() {
@@ -2202,7 +2245,10 @@ function selectMrOption(el, forceResult = null) {
     if (!isCorrect && el) el.classList.add('incorrect');
   }
 
-  if (isCorrect) state.mr.correct++;
+  if (isCorrect) {
+    state.mr.correct++;
+    addXP(15);
+  }
   updateMistakeReview(id, isCorrect);
 
   const item = state.mr.items[state.mr.index];
@@ -2237,6 +2283,8 @@ function showMrResults() {
 
   addHistoryEntry({ date: new Date().toISOString(), setId: '', setTitle: 'Mistake Review', mode: 'quiz', score: pct, wordsStudied: items.length });
   updateStreak();
+  checkBadgeTrigger('mr_complete', { wrong: items.length - correct });
+  if (pct === 100) triggerConfetti();
 }
 
 // ─── Mistake Bank View (browse all mistakes) ──────────────────────────────────
@@ -2327,6 +2375,7 @@ function startSentenceBuilder(setId) {
   renderSbCard();
   showView('sentence-builder');
   updateStreak();
+  checkBadgeTrigger('mode_used', { mode: 'sentence-builder' });
 }
 
 function renderSbCard() {
@@ -2389,8 +2438,10 @@ function checkSentence() {
   const attempt = selected.map(w => w.word).join(' ');
   const isCorrect = normalizeAnswer(attempt) === normalizeAnswer(original);
 
-  if (isCorrect) state.sb.score++;
-  else {
+  if (isCorrect) {
+    state.sb.score++;
+    addXP(8);
+  } else {
     recordMistake({
       question: `Put in order: ${sentences[index].english || original}`,
       myAnswer: attempt,
@@ -2482,6 +2533,7 @@ function startTranslationPractice(setId, direction) {
   renderTpCard();
   showView('translation-practice');
   updateStreak();
+  checkBadgeTrigger('mode_used', { mode: 'translation' });
 }
 
 function renderTpCard() {
@@ -2502,6 +2554,7 @@ function renderTpCard() {
   document.getElementById('tp-next-btn').style.display = 'none';
   state.tp.answered = false;
   setTimeout(() => document.getElementById('tp-input')?.focus(), 100);
+  if (direction === 'de-en' && item.prompt) setTimeout(() => speakGerman(item.prompt), 300);
 }
 
 function checkTranslation() {
@@ -2522,6 +2575,7 @@ function checkTranslation() {
 
   if (isCorrect || isClose) {
     state.tp.score++;
+    addXP(10);
     document.getElementById('tp-input').classList.add('fib-correct');
   } else {
     document.getElementById('tp-input').classList.add('fib-incorrect');
@@ -2571,5 +2625,298 @@ function tpNext() {
 document.addEventListener('DOMContentLoaded', () => {
   const p = getProgress();
   document.getElementById('streak-badge').textContent = `🔥 ${p.streak || 0}`;
+  initDarkMode();
+  updateXpDisplay();
+  maybeShowOnboarding();
+  initInstallPrompt();
   showView('dashboard');
 });
+
+// ─── Dark Mode ────────────────────────────────────────────────────────────────
+
+function initDarkMode() {
+  const isDark = localStorage.getItem('ds_dark') === '1';
+  if (isDark) document.body.classList.add('dark');
+  _applyDarkToggleIcon(isDark);
+}
+
+function toggleDarkMode() {
+  const isDark = document.body.classList.toggle('dark');
+  localStorage.setItem('ds_dark', isDark ? '1' : '0');
+  _applyDarkToggleIcon(isDark);
+  const meta = document.getElementById('theme-color-meta');
+  if (meta) meta.content = isDark ? '#0F1117' : '#5B67F8';
+}
+
+function _applyDarkToggleIcon(isDark) {
+  const btn = document.getElementById('dark-toggle');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+}
+
+// ─── Text-to-Speech ───────────────────────────────────────────────────────────
+
+function speakGerman(text) {
+  if (!window.speechSynthesis || !text) return;
+  if (!getSettings().audioEnabled) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'de-DE';
+  utt.rate = 0.85;
+  function doSpeak() {
+    const voices = speechSynthesis.getVoices();
+    const deVoice = voices.find(v => v.lang.startsWith('de'));
+    if (deVoice) utt.voice = deVoice;
+    window.speechSynthesis.speak(utt);
+  }
+  const voices = speechSynthesis.getVoices();
+  if (voices.length > 0) doSpeak();
+  else speechSynthesis.addEventListener('voiceschanged', doSpeak, { once: true });
+}
+
+// ─── XP System ───────────────────────────────────────────────────────────────
+
+const XP_LEVELS = [
+  { xp: 0,    level: 1, name: 'Lernling',          emoji: '🌱' },
+  { xp: 200,  level: 2, name: 'Schüler',            emoji: '📚' },
+  { xp: 600,  level: 3, name: 'Fortgeschrittener',  emoji: '⚡' },
+  { xp: 1500, level: 4, name: 'Kenner',             emoji: '🎓' },
+  { xp: 3000, level: 5, name: 'Meister',            emoji: '🏆' },
+];
+
+function getLevelInfo(total) {
+  let info = XP_LEVELS[0];
+  for (const lvl of XP_LEVELS) {
+    if (total >= lvl.xp) info = lvl;
+  }
+  return info;
+}
+
+function getXP() {
+  try { return parseInt(localStorage.getItem('ds_xp') || '0', 10); } catch { return 0; }
+}
+
+function saveXP(total) {
+  localStorage.setItem('ds_xp', String(Math.max(0, total)));
+}
+
+function addXP(amount) {
+  if (!amount || amount <= 0) return;
+  const prev = getXP();
+  const next = prev + amount;
+  saveXP(next);
+  showXpPopup(amount);
+  const prevInfo = getLevelInfo(prev);
+  const nextInfo = getLevelInfo(next);
+  if (nextInfo.level > prevInfo.level) {
+    setTimeout(() => {
+      showToast(`🎉 Level up! You are now a ${nextInfo.name} ${nextInfo.emoji}`, 'success');
+      triggerConfetti();
+    }, 400);
+  }
+  updateXpDisplay();
+}
+
+function showXpPopup(amount) {
+  const el = document.createElement('div');
+  el.className = 'xp-popup';
+  el.textContent = `+${amount} XP`;
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
+function updateXpDisplay() {
+  const total = getXP();
+  const info = getLevelInfo(total);
+  const el = document.getElementById('sidebar-xp');
+  if (el) el.textContent = `⭐ ${total} XP · ${info.name} ${info.emoji}`;
+}
+
+// ─── Achievement Badges ───────────────────────────────────────────────────────
+
+const BADGES = [
+  { id: 'first_set',    emoji: '🌟', name: 'Erster Schritt', desc: 'Create your first study set' },
+  { id: 'perfect_quiz', emoji: '🏆', name: 'Perfektionist',  desc: 'Score 100% on a quiz' },
+  { id: 'week_warrior', emoji: '🔥', name: 'Sieben Tage',    desc: 'Reach a 7-day study streak' },
+  { id: 'word_king',    emoji: '📚', name: 'Wortkönig',      desc: 'Master 50 words' },
+  { id: 'mistake_free', emoji: '⚡', name: 'Fehlerlos',      desc: 'Ace a mistake review (no wrong answers)' },
+  { id: 'article_ace',  emoji: '🎯', name: 'Artikel-Ass',   desc: 'Get 20 articles correct' },
+  { id: 'translator',   emoji: '🌍', name: 'Übersetzer',    desc: 'Use Translation Practice mode' },
+  { id: 'all_modes',    emoji: '🏅', name: 'Alleskönner',   desc: 'Use all 6 study modes at least once' },
+];
+
+function getBadges() {
+  try { return JSON.parse(localStorage.getItem('ds_badges') || '[]'); } catch { return []; }
+}
+
+function saveBadges(b) {
+  localStorage.setItem('ds_badges', JSON.stringify(b));
+}
+
+function unlockBadge(id) {
+  const earned = getBadges();
+  if (earned.includes(id)) return;
+  earned.push(id);
+  saveBadges(earned);
+  const badge = BADGES.find(b => b.id === id);
+  if (badge) {
+    setTimeout(() => showToast(`${badge.emoji} Achievement unlocked: ${badge.name}!`, 'success'), 200);
+    setTimeout(() => triggerConfetti(), 300);
+  }
+}
+
+function checkBadgeTrigger(event, data = {}) {
+  if (event === 'set_created') {
+    if (getSets().length >= 1) unlockBadge('first_set');
+  }
+  if (event === 'quiz_complete' && data.score === 100) {
+    unlockBadge('perfect_quiz');
+  }
+  if (event === 'streak_update' && (data.streak || 0) >= 7) {
+    unlockBadge('week_warrior');
+  }
+  if (event === 'word_mastered' && (data.count || 0) >= 50) {
+    unlockBadge('word_king');
+  }
+  if (event === 'mr_complete' && data.wrong === 0) {
+    unlockBadge('mistake_free');
+  }
+  if (event === 'article_correct') {
+    const prev = parseInt(localStorage.getItem('ds_art_correct') || '0', 10);
+    const next = prev + 1;
+    localStorage.setItem('ds_art_correct', String(next));
+    if (next >= 20) unlockBadge('article_ace');
+  }
+  if (event === 'mode_used') {
+    const modes = new Set(JSON.parse(localStorage.getItem('ds_modes_used') || '[]'));
+    if (data.mode) modes.add(data.mode);
+    localStorage.setItem('ds_modes_used', JSON.stringify([...modes]));
+    if (data.mode === 'translation') unlockBadge('translator');
+    if (modes.size >= 6) unlockBadge('all_modes');
+  }
+  if (event === 'fc_complete' && data.wrong === 0) {
+    // Perfect flashcard session — bonus XP already handled
+  }
+}
+
+function renderBadgesView() {
+  const earned = getBadges();
+  const grid = document.getElementById('badges-grid');
+  if (!grid) return;
+  grid.innerHTML = BADGES.map(b => {
+    const isEarned = earned.includes(b.id);
+    return `
+      <div class="badge-card ${isEarned ? 'earned' : 'locked'}">
+        <div class="badge-card-emoji">${b.emoji}</div>
+        <div class="badge-card-name">${esc(b.name)}</div>
+        <div class="badge-card-desc">${esc(b.desc)}</div>
+        <div class="badge-card-status">${isEarned ? '✅ Unlocked' : '🔒 Locked'}</div>
+      </div>`;
+  }).join('');
+}
+
+// ─── Confetti ─────────────────────────────────────────────────────────────────
+
+function triggerConfetti() {
+  const colors = ['#5B67F8', '#FF6B6B', '#4CAF78', '#FFD93D', '#FF9F43', '#a78bfa'];
+  const count = 55;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const size = 6 + Math.random() * 7;
+    el.style.cssText = [
+      `left:${Math.random() * 100}vw`,
+      `background:${colors[i % colors.length]}`,
+      `animation-delay:${Math.random() * 0.5}s`,
+      `animation-duration:${1.2 + Math.random() * 1}s`,
+      `width:${size}px`,
+      `height:${size}px`,
+      `border-radius:${Math.random() > 0.5 ? '50%' : '2px'}`,
+    ].join(';');
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+
+const SAMPLE_STUDY_SET = {
+  id: 'ss-sample-modal-verbs',
+  title: 'Modal Verbs — A1',
+  topic: 'Grammar / Modal Verbs',
+  createdAt: new Date().toISOString(),
+  masteryLevel: 0,
+  demo: false,
+  vocabulary: [
+    { id: uid(), german: 'können', english: 'can / to be able to', article: '', wordType: 'modal', example: 'Ich kann Deutsch sprechen.', exampleTranslation: 'I can speak German.' },
+    { id: uid(), german: 'müssen', english: 'must / have to', article: '', wordType: 'modal', example: 'Du musst lernen.', exampleTranslation: 'You must study.' },
+    { id: uid(), german: 'dürfen', english: 'may / allowed to', article: '', wordType: 'modal', example: 'Darf ich hereinkommen?', exampleTranslation: 'May I come in?' },
+    { id: uid(), german: 'wollen', english: 'to want to', article: '', wordType: 'modal', example: 'Ich will Deutsch lernen.', exampleTranslation: 'I want to learn German.' },
+    { id: uid(), german: 'sollen', english: 'should / supposed to', article: '', wordType: 'modal', example: 'Du sollst pünktlich sein.', exampleTranslation: 'You should be on time.' },
+    { id: uid(), german: 'mögen', english: 'to like', article: '', wordType: 'modal', example: 'Ich mag Schokolade.', exampleTranslation: 'I like chocolate.' },
+  ],
+  quizQuestions: [
+    { id: uid(), question: 'What does "können" mean?', options: ['can / to be able to', 'must / have to', 'may / allowed to', 'to want to'], correctAnswer: 'can / to be able to', explanation: '"Können" expresses ability — what you are able to do.' },
+    { id: uid(), question: 'Which modal verb means "must / have to"?', options: ['müssen', 'dürfen', 'wollen', 'mögen'], correctAnswer: 'müssen', explanation: '"Müssen" expresses obligation or necessity.' },
+    { id: uid(), question: 'Translate: "Darf ich hereinkommen?"', options: ['May I come in?', 'Must I come in?', 'Can I come in?', 'I want to come in.'], correctAnswer: 'May I come in?', explanation: '"Dürfen" is used to ask or give permission.' },
+    { id: uid(), question: 'What does "wollen" mean?', options: ['to want to', 'should', 'to like', 'must'], correctAnswer: 'to want to', explanation: '"Wollen" expresses desire or intention.' },
+  ],
+  fillInTheBlank: [
+    { id: uid(), sentence: 'Ich ___ Deutsch sprechen. (can)', answer: 'kann', explanation: 'Ich → "kann" (ich-form of können)' },
+    { id: uid(), sentence: 'Du ___ lernen. (must)', answer: 'musst', explanation: 'Du → "musst" (du-form of müssen)' },
+    { id: uid(), sentence: 'Er ___ Deutsch lernen. (wants to)', answer: 'will', explanation: 'Er → "will" (er-form of wollen)' },
+  ],
+  grammarTopics: [
+    { id: uid(), title: 'Modal Verbs in German', content: 'German has 6 main modal verbs: können (can), müssen (must), dürfen (may), wollen (want), sollen (should), mögen (like). They combine with an infinitive at the end of the clause. Example: Ich kann Deutsch sprechen.' },
+  ],
+  exampleSentences: [
+    { id: uid(), german: 'Ich kann Deutsch sprechen.', english: 'I can speak German.' },
+    { id: uid(), german: 'Du musst jeden Tag lernen.', english: 'You must study every day.' },
+    { id: uid(), german: 'Darf ich hereinkommen?', english: 'May I come in?' },
+  ],
+  homework: [
+    { id: uid(), question: 'Fill in: Ich ___ morgen zur Schule gehen. (must)', hint: 'Use "müssen". ich → ???', answer: 'Ich muss morgen zur Schule gehen.', explanation: '"Müssen" for necessity: ich → muss.' },
+    { id: uid(), question: 'Translate: "He can speak German."', hint: 'Use "können": er → ???', answer: 'Er kann Deutsch sprechen.', explanation: '"Er kann" + infinitive at the end.' },
+  ],
+};
+
+function maybeShowOnboarding() {
+  if (getSets().length > 0 || localStorage.getItem('ds_welcomed')) return;
+  document.getElementById('onboarding-overlay')?.classList.remove('hidden');
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('ds_welcomed', '1');
+  document.getElementById('onboarding-overlay')?.classList.add('hidden');
+  // Add sample set only if still none
+  if (getSets().length === 0) {
+    saveSets([SAMPLE_STUDY_SET]);
+    showView('dashboard');
+  }
+}
+
+// ─── PWA Install Prompt ───────────────────────────────────────────────────────
+
+let _deferredInstallPrompt = null;
+
+function initInstallPrompt() {
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    const banner = document.getElementById('install-banner');
+    if (banner) banner.classList.remove('hidden');
+    const btn = document.getElementById('install-banner-btn');
+    if (btn) {
+      btn.onclick = () => {
+        _deferredInstallPrompt.prompt();
+        _deferredInstallPrompt.userChoice.then(() => {
+          _deferredInstallPrompt = null;
+          banner.classList.add('hidden');
+        });
+      };
+    }
+  });
+  window.addEventListener('appinstalled', () => {
+    const banner = document.getElementById('install-banner');
+    if (banner) banner.classList.add('hidden');
+  });
+}
