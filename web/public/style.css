@@ -1733,4 +1733,139 @@ body.dark .badge-card.earned { background: #1a1500; border-color: #ffd700; }
   flex-shrink: 0;
 }
 
+/* ── Bottom Nav ─────────────────────────────────────────────── */
+.bottom-nav {
+  display: none;
+}
+@media (max-width: 640px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border-top: 2px solid var(--border);
+    z-index: 150;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -4px 20px rgba(91,103,248,0.10);
+  }
+  .main-content { padding-bottom: 72px; }
+}
+.bnav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-light);
+  min-height: 56px;
+  position: relative;
+  transition: color 0.15s;
+}
+.bnav-btn.active { color: var(--primary); }
+.bnav-btn.active .bnav-icon { transform: scale(1.15); }
+.bnav-icon { font-size: 20px; line-height: 1; transition: transform 0.15s; }
+.bnav-label { font-size: 10px; font-weight: 600; }
+.bnav-badge {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 16px);
+  background: var(--error);
+  color: #fff;
+  border-radius: var(--radius-full);
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+body.dark .bottom-nav { background: var(--card); border-top-color: var(--border); }
+
+/* ── Sample Lesson CTA ──────────────────────────────────────── */
+.sample-lesson-cta {
+  background: linear-gradient(135deg, var(--primary) 0%, #7C3AED 100%);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.sample-lesson-cta:active { transform: scale(0.98); }
+.sample-cta-icon { font-size: 30px; flex-shrink: 0; }
+.sample-cta-info { flex: 1; }
+.sample-cta-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.sample-cta-sub { font-size: 12px; opacity: 0.85; }
+.sample-cta-arrow { font-size: 18px; opacity: 0.75; flex-shrink: 0; }
+
+/* ── Level badge on set cards ───────────────────────────────── */
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--primary-light);
+  color: var(--primary);
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.level-badge-a1 { background: #E8F5EE; color: var(--success); }
+.level-badge-a2 { background: var(--primary-light); color: var(--primary); }
+.level-badge-b1 { background: var(--warning-light); color: var(--warning); }
+
+/* ── Homework one-at-a-time ─────────────────────────────────── */
+.hw-hint-area {
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+body.dark .hw-hint-area { background: rgba(255,211,61,0.08); border-color: rgba(255,211,61,0.3); }
+
+/* ── Enhanced mistake explanation ───────────────────────────── */
+.mistake-explain {
+  margin-top: 0;
+}
+.mistake-explain-your {
+  font-size: 13px;
+  color: var(--error);
+  margin-bottom: 4px;
+}
+.mistake-explain-correct {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 8px;
+}
+.mistake-explain-why {
+  font-size: 13px;
+  color: var(--text-sec);
+  line-height: 1.5;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
 

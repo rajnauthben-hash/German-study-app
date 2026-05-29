@@ -115,6 +115,16 @@
       </div>
     </div>
 
+    <!-- Sample Lesson CTA (hidden once user has real sets) -->
+    <button class="sample-lesson-cta" id="dash-sample-cta" onclick="startSampleLesson()" style="display:none">
+      <span class="sample-cta-icon">🇩🇪</span>
+      <span class="sample-cta-info">
+        <div class="sample-cta-title">Start Sample Lesson — Daily Life A1/A2</div>
+        <div class="sample-cta-sub">Try all practice modes with 12 words, quizzes, and homework</div>
+      </span>
+      <span class="sample-cta-arrow">▶</span>
+    </button>
+
     <div class="section-header" style="margin-top:8px">
       <h2 class="section-title">Today's Plan</h2>
     </div>
@@ -387,8 +397,57 @@ Du musst lernen. – You must study.
         <div class="study-set-topic" id="hw-set-name"></div>
       </div>
     </div>
-    <p class="page-sub" style="margin-bottom:20px">Try each question yourself first, then reveal hints and answers step by step.</p>
-    <div id="hw-questions"></div>
+
+    <div id="hw-empty" style="display:none"></div>
+
+    <div id="hw-active" style="display:none">
+      <div class="quiz-meta">
+        <span class="quiz-counter" id="hw-counter">1 / 5</span>
+        <span class="badge badge-primary" id="hw-score-badge">✅ 0</span>
+      </div>
+      <div class="progress-bar-track" style="margin-bottom:20px">
+        <div class="progress-bar-fill" id="hw-progress-bar" style="width:0%"></div>
+      </div>
+
+      <div class="quiz-question-card">
+        <div class="quiz-q-label">Question</div>
+        <div class="quiz-q-text" id="hw-question-text"></div>
+      </div>
+
+      <div class="hw-hint-area" id="hw-hint-area" style="display:none">
+        💡 <span id="hw-hint-text"></span>
+      </div>
+
+      <input type="text" id="hw-input" class="fib-input" placeholder="Type your answer…"
+        autocomplete="off" autocorrect="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter')checkHwAnswer()">
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-outline" id="hw-hint-btn" onclick="showHwHint()" style="flex:1">💡 Hint</button>
+        <button class="btn btn-primary" id="hw-check-btn" onclick="checkHwAnswer()" style="flex:1">Check Answer</button>
+      </div>
+
+      <div class="quiz-feedback" id="hw-feedback" style="display:none">
+        <div class="quiz-feedback-title" id="hw-feedback-title"></div>
+        <div class="quiz-feedback-exp" id="hw-feedback-exp"></div>
+      </div>
+
+      <button class="btn btn-ghost btn-sm" id="hw-reveal-btn" onclick="revealFullHwAnswer()"
+        style="display:none;width:100%;margin-top:8px">👁 Reveal full answer &amp; explanation</button>
+      <button class="btn btn-primary" id="hw-next-btn" onclick="hwNext()"
+        style="display:none;width:100%;margin-top:12px">Next →</button>
+    </div>
+
+    <div id="hw-results" class="results-screen" style="display:none">
+      <div class="results-emoji" id="hw-result-emoji">📝</div>
+      <div class="results-score" id="hw-result-score">3 / 5</div>
+      <div class="results-label" id="hw-result-label">Good work!</div>
+      <div class="results-sub" id="hw-result-sub"></div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="startHomework(state.hw?.setId)">Try Again</button>
+        <button class="btn btn-outline" onclick="backToStudySet()">Back to Study Set</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── VOCABULARY BANK ────────────────────────────────────── -->
@@ -788,6 +847,31 @@ Du musst lernen. – You must study.
   <button class="install-banner-btn" id="install-banner-btn">Install</button>
   <button class="install-banner-dismiss" onclick="document.getElementById('install-banner').classList.add('hidden')">✕</button>
 </div>
+
+<!-- ── Bottom Nav (mobile) ──────────────────────────────────── -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
+  <button class="bnav-btn active" id="bnav-home" onclick="showView('dashboard')" aria-label="Home">
+    <span class="bnav-icon">🏠</span>
+    <span class="bnav-label">Home</span>
+  </button>
+  <button class="bnav-btn" id="bnav-create" onclick="showView('create')" aria-label="Scan">
+    <span class="bnav-icon">📷</span>
+    <span class="bnav-label">Scan</span>
+  </button>
+  <button class="bnav-btn" id="bnav-saved-sets" onclick="showView('saved-sets')" aria-label="Study">
+    <span class="bnav-icon">📚</span>
+    <span class="bnav-label">Study</span>
+  </button>
+  <button class="bnav-btn" id="bnav-mistake-bank" onclick="showView('mistake-bank')" aria-label="Mistakes">
+    <span class="bnav-icon">🔁</span>
+    <span class="bnav-label">Mistakes</span>
+    <span class="bnav-badge" id="bnav-mistakes-count" style="display:none">0</span>
+  </button>
+  <button class="bnav-btn" id="bnav-settings" onclick="showView('settings')" aria-label="Settings">
+    <span class="bnav-icon">⚙️</span>
+    <span class="bnav-label">More</span>
+  </button>
+</nav>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="app.js"></script>

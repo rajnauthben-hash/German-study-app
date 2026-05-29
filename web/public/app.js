@@ -67,6 +67,9 @@ let state = {
 
   // Fill-in-blank
   fib: { items: [], index: 0, score: 0, answered: false, setId: null },
+
+  // Homework helper
+  hw: { items: [], index: 0, correct: 0, answered: false, setId: null, revealed: false },
 };
 
 // ─── Storage Helpers ──────────────────────────────────────────────────────────
@@ -253,6 +256,19 @@ function showView(name) {
   const snavLink = document.getElementById(`snav-${name}`);
   if (snavLink) snavLink.classList.add('active');
 
+  // Update bottom nav active state
+  const bnavMap = { dashboard: 'bnav-home', create: 'bnav-create', 'saved-sets': 'bnav-saved-sets', 'mistake-bank': 'bnav-mistake-bank', settings: 'bnav-settings' };
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+  const bnavId = bnavMap[name] || null;
+  if (bnavId) document.getElementById(bnavId)?.classList.add('active');
+  // Update due-mistakes badge on bottom nav
+  const dueBadge = document.getElementById('bnav-mistakes-count');
+  if (dueBadge) {
+    const dueCount = getDueMistakes().length;
+    dueBadge.textContent = dueCount;
+    dueBadge.style.display = dueCount > 0 ? 'flex' : 'none';
+  }
+
   state.currentView = name;
   window.scrollTo(0, 0);
 
@@ -369,6 +385,13 @@ function initDashboard() {
     planEl.innerHTML = planCards.join('');
   }
 
+  // Sample Lesson CTA — shown when no real (non-sample) sets exist
+  const sampleCta = document.getElementById('dash-sample-cta');
+  const hasRealSets = sets.some(s => s.id !== 'ss-sample-a1-daily');
+  if (sampleCta) {
+    sampleCta.style.display = hasRealSets ? 'none' : 'flex';
+  }
+
   // Recent sets (up to 4)
   const recentSets = sets.slice(0, 4);
   const container = document.getElementById('dash-recent-sets');
@@ -378,8 +401,11 @@ function initDashboard() {
       <div class="empty-state">
         <div class="empty-state-icon">📚</div>
         <h3>No study sets yet</h3>
-        <p>Add a worksheet to create your first set</p>
-        <button class="btn btn-primary" onclick="showView('create')">➕ Add Worksheet</button>
+        <p>Try the sample lesson or scan a worksheet to get started.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+          <button class="btn btn-primary" onclick="startSampleLesson()">▶ Start Sample Lesson</button>
+          <button class="btn btn-outline" onclick="showView('create')">📷 Scan Worksheet</button>
+        </div>
       </div>`;
     return;
   }
@@ -800,13 +826,17 @@ function renderSetCard(set) {
   const lastStudied = set.lastStudied ? formatDate(set.lastStudied) : 'Not studied yet';
   const vocabCount = (set.vocabulary || []).length;
 
+  const lvl = set.level || '';
+  const lvlClass = lvl === 'A1' ? 'level-badge-a1' : lvl === 'A2' ? 'level-badge-a2' : lvl === 'B1' ? 'level-badge-b1' : 'level-badge-a2';
+  const lvlBadge = lvl ? `<span class="level-badge ${lvlClass}">${esc(lvl)}</span>` : '';
+
   return `
     <div class="set-card" onclick="openStudySet('${set.id}')">
       <button class="set-card-delete" onclick="deleteSet('${set.id}', event)" title="Delete">✕</button>
       <div class="set-card-header">
         <div class="set-card-icon">📄</div>
         <div>
-          <div class="set-card-title">${esc(set.title)}</div>
+          <div class="set-card-title">${esc(set.title)}${lvlBadge}</div>
           <div class="set-card-topic">${esc(set.topic || '')}</div>
         </div>
       </div>
@@ -862,7 +892,10 @@ function openStudySet(id) {
 }
 
 function renderStudySetView(set) {
-  document.getElementById('ss-title').textContent = set.title || 'Study Set';
+  const lvl = set.level || '';
+  const lvlClass = lvl === 'A1' ? 'level-badge-a1' : lvl === 'A2' ? 'level-badge-a2' : 'level-badge-b1';
+  document.getElementById('ss-title').innerHTML = esc(set.title || 'Study Set') +
+    (lvl ? ` <span class="level-badge ${lvlClass}" style="font-size:12px">${esc(lvl)}</span>` : '');
   document.getElementById('ss-topic').textContent = set.topic || '';
 
   // Demo banner
@@ -1276,8 +1309,16 @@ function selectOption(el) {
   const fb = document.getElementById('quiz-feedback');
   fb.className = `quiz-feedback ${isCorrect ? 'correct' : 'incorrect'}`;
   fb.style.display = '';
-  document.getElementById('quiz-feedback-title').textContent = isCorrect && quizMatch === 'close' ? '✅ Close enough!' : isCorrect ? '✅ Correct!' : `❌ The answer is: ${correct}`;
-  document.getElementById('quiz-feedback-exp').textContent = explanation || '';
+  if (isCorrect) {
+    document.getElementById('quiz-feedback-title').textContent = quizMatch === 'close' ? '✅ Close enough!' : '✅ Correct!';
+    document.getElementById('quiz-feedback-exp').textContent = explanation || '';
+  } else {
+    document.getElementById('quiz-feedback-title').innerHTML =
+      `<div class="mistake-explain-your">❌ You chose: ${esc(selected)}</div>
+       <div class="mistake-explain-correct">✓ Correct: ${esc(correct)}</div>`;
+    document.getElementById('quiz-feedback-exp').innerHTML =
+      explanation ? `<div class="mistake-explain-why">${esc(explanation)}</div>` : '';
+  }
 
   const nextBtn = document.getElementById('quiz-next-btn');
   nextBtn.textContent = state.quiz.index + 1 >= state.quiz.questions.length ? 'See Results 🎉' : 'Next Question →';
@@ -1349,51 +1390,160 @@ function startHomework(setId) {
   const sets = getSets();
   const set = sets.find(s => s.id === setId) || state.currentSet;
   if (!set) { showToast('Study set not found.', 'error'); return; }
+
   state.currentSet = set;
-  document.getElementById('hw-set-name').textContent = set.title;
+  const el = document.getElementById('hw-set-name');
+  if (el) el.textContent = set.title;
 
   if (!set.homework?.length) {
-    document.getElementById('hw-questions').innerHTML = `
+    document.getElementById('hw-empty').style.display = '';
+    document.getElementById('hw-active').style.display = 'none';
+    document.getElementById('hw-results').style.display = 'none';
+    document.getElementById('hw-empty').innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">📝</div>
         <h3>No homework questions</h3>
-        <p>This study set has no homework questions. They appear when numbered questions (1. 2. 3.) are found in your worksheet.</p>
+        <p>Numbered questions (1. 2. 3.) in your worksheet become Homework Helper questions.</p>
         <button class="btn btn-primary" onclick="backToStudySet()">← Back to Study Set</button>
       </div>`;
     showView('homework');
     return;
   }
 
-  document.getElementById('hw-questions').innerHTML = set.homework.map((q, i) => `
-    <div class="hw-card" id="hw-${i}">
-      <div class="hw-q-num">Question ${i + 1}</div>
-      <div class="hw-question">${esc(q.question)}</div>
-      <div class="hw-hint" id="hw-hint-${i}">
-        💡 <strong>Hint:</strong> ${esc(q.hint || 'Think about the grammar.')}
-      </div>
-      <div class="hw-answer" id="hw-answer-${i}">
-        <div class="hw-answer-text">✅ ${esc(q.answer)}</div>
-        <div class="hw-answer-exp">${esc(q.explanation || '')}</div>
-      </div>
-      <div class="hw-actions">
-        <button class="btn btn-outline btn-sm" onclick="revealHint(${i})">💡 Show Hint</button>
-        <button class="btn btn-success btn-sm" onclick="revealAnswer(${i})">👁 Show Answer</button>
-      </div>
-    </div>`).join('');
+  state.hw = {
+    items: [...set.homework],
+    index: 0,
+    correct: 0,
+    answered: false,
+    setId: set.id,
+    revealed: false,
+  };
 
+  document.getElementById('hw-empty').style.display = 'none';
+  document.getElementById('hw-active').style.display = '';
+  document.getElementById('hw-results').style.display = 'none';
+
+  renderHwQuestion();
   showView('homework');
   updateStreak();
-  addHistoryEntry({ date: new Date().toISOString(), setId: set.id, setTitle: set.title, mode: 'homework', score: null, wordsStudied: set.homework.length });
   checkBadgeTrigger('mode_used', { mode: 'homework' });
 }
 
-function revealHint(i) {
-  document.getElementById(`hw-hint-${i}`)?.classList.add('visible');
+function renderHwQuestion() {
+  const { items, index, correct } = state.hw;
+  const q = items[index];
+
+  document.getElementById('hw-counter').textContent = `${index + 1} / ${items.length}`;
+  document.getElementById('hw-score-badge').textContent = `✅ ${correct}`;
+  document.getElementById('hw-progress-bar').style.width = `${(index / items.length) * 100}%`;
+  document.getElementById('hw-question-text').textContent = q.question;
+
+  // Reset UI for new question
+  const inputEl = document.getElementById('hw-input');
+  inputEl.value = '';
+  inputEl.disabled = false;
+  inputEl.classList.remove('fib-correct', 'fib-incorrect');
+
+  document.getElementById('hw-hint-area').style.display = 'none';
+  document.getElementById('hw-hint-text').textContent = q.hint || '';
+  document.getElementById('hw-hint-btn').style.display = '';
+  document.getElementById('hw-check-btn').style.display = '';
+  document.getElementById('hw-feedback').style.display = 'none';
+  document.getElementById('hw-next-btn').style.display = 'none';
+  document.getElementById('hw-reveal-btn').style.display = 'none';
+
+  state.hw.answered = false;
+  state.hw.revealed = false;
+  setTimeout(() => document.getElementById('hw-input')?.focus(), 100);
 }
 
-function revealAnswer(i) {
-  document.getElementById(`hw-answer-${i}`)?.classList.add('visible');
-  document.getElementById(`hw-hint-${i}`)?.classList.add('visible');
+function showHwHint() {
+  document.getElementById('hw-hint-area').style.display = '';
+}
+
+function checkHwAnswer() {
+  if (state.hw.answered) return;
+  state.hw.answered = true;
+
+  const { items, index } = state.hw;
+  const q = items[index];
+  const userAnswer = document.getElementById('hw-input').value.trim();
+  const correct = q.answer || '';
+  const match = isAnswerAccepted(userAnswer, correct);
+  const isRight = !!match;
+
+  document.getElementById('hw-input').disabled = true;
+  document.getElementById('hw-check-btn').style.display = 'none';
+  document.getElementById('hw-hint-btn').style.display = 'none';
+
+  if (isRight) {
+    state.hw.correct++;
+    addXP(10);
+    document.getElementById('hw-input').classList.add('fib-correct');
+  } else {
+    document.getElementById('hw-input').classList.add('fib-incorrect');
+    recordMistake({
+      question: q.question,
+      myAnswer: userAnswer,
+      correct,
+      explanation: q.explanation || '',
+      topic: 'Homework',
+      setId: state.hw.setId || '',
+      setTitle: state.currentSet?.title || '',
+      mode: 'homework',
+    });
+    document.getElementById('hw-reveal-btn').style.display = '';
+  }
+
+  const fb = document.getElementById('hw-feedback');
+  fb.className = `quiz-feedback ${isRight ? 'correct' : 'incorrect'}`;
+  fb.style.display = '';
+  document.getElementById('hw-feedback-title').innerHTML = isRight
+    ? (match === 'close' ? '✅ Close enough!' : '✅ Correct!')
+    : `<div class="mistake-explain-your">❌ Your answer: ${esc(userAnswer || '(blank)')}</div>
+       <div class="mistake-explain-correct">✓ Correct: ${esc(correct)}</div>`;
+  document.getElementById('hw-feedback-exp').textContent = isRight ? (q.explanation || '') : '';
+
+  const nextBtn = document.getElementById('hw-next-btn');
+  nextBtn.textContent = index + 1 >= items.length ? 'See Results 🎉' : 'Next Question →';
+  nextBtn.style.display = '';
+}
+
+function revealFullHwAnswer() {
+  const { items, index } = state.hw;
+  const q = items[index];
+  const expEl = document.getElementById('hw-feedback-exp');
+  expEl.innerHTML = `<div class="mistake-explain-correct">✓ ${esc(q.answer)}</div>
+    ${q.explanation ? `<div class="mistake-explain-why">${esc(q.explanation)}</div>` : ''}`;
+  document.getElementById('hw-reveal-btn').style.display = 'none';
+}
+
+function hwNext() {
+  const { items, index, correct } = state.hw;
+  if (index + 1 >= items.length) {
+    showHwResults();
+  } else {
+    state.hw.index++;
+    renderHwQuestion();
+  }
+}
+
+function showHwResults() {
+  const { correct, items, setId } = state.hw;
+  const total = items.length;
+  const pct = Math.round((correct / total) * 100);
+  const info = getScoreInfo(pct);
+
+  document.getElementById('hw-active').style.display = 'none';
+  document.getElementById('hw-results').style.display = '';
+  document.getElementById('hw-result-emoji').textContent = info.emoji;
+  document.getElementById('hw-result-score').textContent = `${correct} / ${total}`;
+  document.getElementById('hw-result-label').textContent = info.label;
+  document.getElementById('hw-result-sub').textContent = `${pct}% correct · Mistakes saved to review`;
+
+  addHistoryEntry({ date: new Date().toISOString(), setId, setTitle: state.currentSet?.title || '', mode: 'homework', score: pct, wordsStudied: total });
+  checkBadgeTrigger('mode_used', { mode: 'homework' });
+  if (pct === 100) triggerConfetti();
 }
 
 // ─── Vocabulary Bank ──────────────────────────────────────────────────────────
@@ -2140,8 +2290,16 @@ function checkFibAnswer() {
   const fb = document.getElementById('fib-feedback');
   fb.className = `quiz-feedback ${isRight ? 'correct' : 'incorrect'}`;
   fb.style.display = '';
-  document.getElementById('fib-feedback-title').textContent = isRight && fibMatch === 'close' ? '✅ Close enough!' : isRight ? '✅ Correct!' : `❌ Answer: ${correct}`;
-  document.getElementById('fib-feedback-exp').textContent = q.explanation || '';
+  if (isRight) {
+    document.getElementById('fib-feedback-title').textContent = fibMatch === 'close' ? '✅ Close enough!' : '✅ Correct!';
+    document.getElementById('fib-feedback-exp').textContent = q.explanation || '';
+  } else {
+    document.getElementById('fib-feedback-title').innerHTML =
+      `<div class="mistake-explain-your">❌ You wrote: ${esc(userAnswer || '(blank)')}</div>
+       <div class="mistake-explain-correct">✓ Answer: ${esc(correct)}</div>`;
+    document.getElementById('fib-feedback-exp').innerHTML =
+      q.explanation ? `<div class="mistake-explain-why">${esc(q.explanation)}</div>` : '';
+  }
 
   const nextBtn = document.getElementById('fib-next-btn');
   nextBtn.textContent = index + 1 >= items.length ? 'See Results 🎉' : 'Next →';
@@ -2840,58 +2998,126 @@ function triggerConfetti() {
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 const SAMPLE_STUDY_SET = {
-  id: 'ss-sample-modal-verbs',
-  title: 'Modal Verbs — A1',
-  topic: 'Grammar / Modal Verbs',
+  id: 'ss-sample-a1-daily',
+  title: 'Daily Life — A1/A2',
+  topic: 'Everyday Vocabulary & Grammar',
+  level: 'A1',
   createdAt: new Date().toISOString(),
   masteryLevel: 0,
   demo: false,
   vocabulary: [
-    { id: uid(), german: 'können', english: 'can / to be able to', article: '', wordType: 'modal', example: 'Ich kann Deutsch sprechen.', exampleTranslation: 'I can speak German.' },
-    { id: uid(), german: 'müssen', english: 'must / have to', article: '', wordType: 'modal', example: 'Du musst lernen.', exampleTranslation: 'You must study.' },
-    { id: uid(), german: 'dürfen', english: 'may / allowed to', article: '', wordType: 'modal', example: 'Darf ich hereinkommen?', exampleTranslation: 'May I come in?' },
-    { id: uid(), german: 'wollen', english: 'to want to', article: '', wordType: 'modal', example: 'Ich will Deutsch lernen.', exampleTranslation: 'I want to learn German.' },
-    { id: uid(), german: 'sollen', english: 'should / supposed to', article: '', wordType: 'modal', example: 'Du sollst pünktlich sein.', exampleTranslation: 'You should be on time.' },
-    { id: uid(), german: 'mögen', english: 'to like', article: '', wordType: 'modal', example: 'Ich mag Schokolade.', exampleTranslation: 'I like chocolate.' },
-  ],
-  quizQuestions: [
-    { id: uid(), question: 'What does "können" mean?', options: ['can / to be able to', 'must / have to', 'may / allowed to', 'to want to'], correctAnswer: 'can / to be able to', explanation: '"Können" expresses ability — what you are able to do.' },
-    { id: uid(), question: 'Which modal verb means "must / have to"?', options: ['müssen', 'dürfen', 'wollen', 'mögen'], correctAnswer: 'müssen', explanation: '"Müssen" expresses obligation or necessity.' },
-    { id: uid(), question: 'Translate: "Darf ich hereinkommen?"', options: ['May I come in?', 'Must I come in?', 'Can I come in?', 'I want to come in.'], correctAnswer: 'May I come in?', explanation: '"Dürfen" is used to ask or give permission.' },
-    { id: uid(), question: 'What does "wollen" mean?', options: ['to want to', 'should', 'to like', 'must'], correctAnswer: 'to want to', explanation: '"Wollen" expresses desire or intention.' },
-  ],
-  fillInTheBlank: [
-    { id: uid(), sentence: 'Ich ___ Deutsch sprechen. (can)', answer: 'kann', explanation: 'Ich → "kann" (ich-form of können)' },
-    { id: uid(), sentence: 'Du ___ lernen. (must)', answer: 'musst', explanation: 'Du → "musst" (du-form of müssen)' },
-    { id: uid(), sentence: 'Er ___ Deutsch lernen. (wants to)', answer: 'will', explanation: 'Er → "will" (er-form of wollen)' },
+    { id: uid(), german: 'Haus', english: 'house', article: 'das', wordType: 'noun', example: 'Das Haus ist groß.', exampleTranslation: 'The house is big.' },
+    { id: uid(), german: 'Schule', english: 'school', article: 'die', wordType: 'noun', example: 'Ich gehe in die Schule.', exampleTranslation: 'I go to school.' },
+    { id: uid(), german: 'Freund', english: 'friend (male)', article: 'der', wordType: 'noun', example: 'Mein Freund heißt Max.', exampleTranslation: 'My friend is called Max.' },
+    { id: uid(), german: 'Stadt', english: 'city / town', article: 'die', wordType: 'noun', example: 'Berlin ist eine große Stadt.', exampleTranslation: 'Berlin is a big city.' },
+    { id: uid(), german: 'Buch', english: 'book', article: 'das', wordType: 'noun', example: 'Ich lese ein Buch.', exampleTranslation: 'I am reading a book.' },
+    { id: uid(), german: 'Arbeit', english: 'work / job', article: 'die', wordType: 'noun', example: 'Meine Arbeit beginnt um 9 Uhr.', exampleTranslation: 'My work starts at 9 o\'clock.' },
+    { id: uid(), german: 'lernen', english: 'to learn / to study', article: '', wordType: 'verb', example: 'Ich lerne jeden Tag Deutsch.', exampleTranslation: 'I learn German every day.' },
+    { id: uid(), german: 'kaufen', english: 'to buy', article: '', wordType: 'verb', example: 'Ich kaufe Brot im Supermarkt.', exampleTranslation: 'I buy bread at the supermarket.' },
+    { id: uid(), german: 'wohnen', english: 'to live / to reside', article: '', wordType: 'verb', example: 'Ich wohne in Berlin.', exampleTranslation: 'I live in Berlin.' },
+    { id: uid(), german: 'groß', english: 'big / tall', article: '', wordType: 'adjective', example: 'Das Haus ist sehr groß.', exampleTranslation: 'The house is very big.' },
+    { id: uid(), german: 'klein', english: 'small / little', article: '', wordType: 'adjective', example: 'Das Kind ist noch klein.', exampleTranslation: 'The child is still small.' },
+    { id: uid(), german: 'jeden Tag', english: 'every day', article: '', wordType: 'phrase', example: 'Ich lerne jeden Tag.', exampleTranslation: 'I study every day.' },
   ],
   grammarTopics: [
-    { id: uid(), title: 'Modal Verbs in German', content: 'German has 6 main modal verbs: können (can), müssen (must), dürfen (may), wollen (want), sollen (should), mögen (like). They combine with an infinitive at the end of the clause. Example: Ich kann Deutsch sprechen.' },
+    {
+      id: uid(),
+      title: 'German Articles: der / die / das',
+      rule: 'Every German noun has a grammatical gender — masculine (der), feminine (die), or neuter (das). You must memorize the article with each noun. Tip: most nouns ending in -ung, -heit, -keit are die. Nouns ending in -chen or -lein are always das.',
+      examples: [
+        { german: 'der Freund — masculine', english: 'the friend (male)' },
+        { german: 'die Stadt — feminine', english: 'the city' },
+        { german: 'das Haus — neuter', english: 'the house' },
+      ],
+      tip: 'Make flashcards with the article — never learn a noun without it!',
+    },
+    {
+      id: uid(),
+      title: 'Verb Conjugation — Present Tense',
+      rule: 'Regular German verbs follow a simple pattern in present tense: remove -en from the infinitive and add the correct ending. ich → -e, du → -st, er/sie/es → -t, wir → -en, ihr → -t, sie/Sie → -en.',
+      examples: [
+        { german: 'Ich lerne Deutsch. (ich + lerne)', english: 'I learn German.' },
+        { german: 'Du wohnst in Berlin. (du + wohnst)', english: 'You live in Berlin.' },
+        { german: 'Wir kaufen Brot. (wir + kaufen)', english: 'We buy bread.' },
+      ],
+      tip: 'Irregular verbs (sein, haben, gehen) must be memorized separately.',
+    },
+    {
+      id: uid(),
+      title: 'Word Order — Verb in Second Position',
+      rule: 'In a German main clause, the conjugated verb is always in the second position, no matter what comes first. If you start with a time word or adverb, the verb still comes second — and the subject moves to third position.',
+      examples: [
+        { german: 'Ich gehe heute zur Schule.', english: 'I go to school today.' },
+        { german: 'Heute gehe ich zur Schule.', english: 'Today I go to school. (verb stays 2nd!)' },
+      ],
+      tip: 'Count to two — the verb is always slot number two.',
+    },
+  ],
+  quizQuestions: [
+    { id: uid(), question: 'What is the article for "Haus" (house)?', options: ['das', 'der', 'die', 'ein'], correctAnswer: 'das', explanation: '"das Haus" — neuter gender. Neuter nouns often use "das".' },
+    { id: uid(), question: 'What does "wohnen" mean?', options: ['to live / to reside', 'to buy', 'to learn', 'to work'], correctAnswer: 'to live / to reside', explanation: '"Ich wohne in Berlin" = I live in Berlin.' },
+    { id: uid(), question: 'Which article goes with "Schule" (school)?', options: ['die', 'der', 'das', 'eine'], correctAnswer: 'die', explanation: '"die Schule" — feminine. Nouns ending in -e are often feminine.' },
+    { id: uid(), question: 'How do you conjugate "lernen" for "ich"?', options: ['ich lerne', 'ich lernt', 'ich lernen', 'ich lernst'], correctAnswer: 'ich lerne', explanation: 'Regular verb: lernen → remove -en, add -e for ich → lerne.' },
+    { id: uid(), question: 'Translate: "I am reading a book."', options: ['Ich lese ein Buch.', 'Ich kaufe ein Buch.', 'Ich habe ein Buch.', 'Ich lerne ein Buch.'], correctAnswer: 'Ich lese ein Buch.', explanation: '"lesen" = to read. Ich lese = I read / I am reading.' },
+    { id: uid(), question: 'What does "groß" mean?', options: ['big / tall', 'small', 'fast', 'old'], correctAnswer: 'big / tall', explanation: '"groß" is one of the most common German adjectives — it means big or tall depending on context.' },
+  ],
+  fillInTheBlank: [
+    { id: uid(), sentence: 'Ich ___ in Berlin. (to live)', answer: 'wohne', hint: 'Verb: wohnen. Conjugate for "ich".', explanation: 'ich + wohnen → ich wohne (remove -en, add -e)' },
+    { id: uid(), sentence: '___ Buch ist groß. (the — neuter)', answer: 'Das', hint: 'Buch is neuter gender.', explanation: '"das Buch" — the book. Neuter → das.' },
+    { id: uid(), sentence: 'Mein Freund ___ in München. (to live)', answer: 'wohnt', hint: 'Conjugate wohnen for er/sie.', explanation: 'er/sie/es + wohnen → wohnt (remove -en, add -t)' },
+    { id: uid(), sentence: 'Ich lerne ___ Tag Deutsch. (every)', answer: 'jeden', hint: 'The phrase means "every day".', explanation: '"jeden Tag" = every day. Accusative case for masculine "Tag".' },
+    { id: uid(), sentence: 'Die ___ ist sehr groß. (city)', answer: 'Stadt', hint: 'German for city — starts with Sta-', explanation: '"Stadt" = city. It takes the article "die" (feminine).' },
   ],
   exampleSentences: [
-    { id: uid(), german: 'Ich kann Deutsch sprechen.', english: 'I can speak German.' },
-    { id: uid(), german: 'Du musst jeden Tag lernen.', english: 'You must study every day.' },
-    { id: uid(), german: 'Darf ich hereinkommen?', english: 'May I come in?' },
+    { german: 'Ich wohne in Berlin.', english: 'I live in Berlin.' },
+    { german: 'Meine Schule ist in der Stadt.', english: 'My school is in the city.' },
+    { german: 'Ich lerne jeden Tag Deutsch.', english: 'I learn German every day.' },
+    { german: 'Das Haus ist groß und schön.', english: 'The house is big and beautiful.' },
+    { german: 'Mein Freund kauft ein Buch.', english: 'My friend is buying a book.' },
+    { german: 'Die Arbeit beginnt um neun Uhr.', english: 'Work starts at nine o\'clock.' },
+  ],
+  toMemorize: [
+    'das Haus — house (neuter)',
+    'die Schule — school (feminine)',
+    'der Freund — friend / boyfriend (masculine)',
+    'die Stadt — city (feminine)',
+    'wohnen → ich wohne, du wohnst, er wohnt',
+    'lernen → ich lerne, du lernst, er lernt',
+  ],
+  toUnderstand: [
+    'Verb always in second position in a main clause',
+    'Every noun has a gender: der (m), die (f), das (n)',
+    'Regular verb conjugation: remove -en, add the correct ending',
   ],
   homework: [
-    { id: uid(), question: 'Fill in: Ich ___ morgen zur Schule gehen. (must)', hint: 'Use "müssen". ich → ???', answer: 'Ich muss morgen zur Schule gehen.', explanation: '"Müssen" for necessity: ich → muss.' },
-    { id: uid(), question: 'Translate: "He can speak German."', hint: 'Use "können": er → ???', answer: 'Er kann Deutsch sprechen.', explanation: '"Er kann" + infinitive at the end.' },
+    { id: uid(), question: 'Write a sentence: "I live in a big city." Use wohnen + groß + Stadt.', hint: 'Start with "Ich wohne..." and remember the adjective ending.', answer: 'Ich wohne in einer großen Stadt.', explanation: '"in einer großen Stadt" — dative case after "in" for location. Adjective gets -en ending.' },
+    { id: uid(), question: 'Conjugate "kaufen" for all 6 pronouns (ich, du, er, wir, ihr, sie).', hint: 'Regular verb: remove -en, then add: -e, -st, -t, -en, -t, -en', answer: 'ich kaufe, du kaufst, er kauft, wir kaufen, ihr kauft, sie kaufen', explanation: 'kaufen is a regular verb. The stem is "kauf-" and the endings follow the standard pattern.' },
+    { id: uid(), question: 'What article does "Arbeit" take? Write a sentence with it.', hint: 'Think about nouns ending in -eit — they are usually feminine.', answer: 'die Arbeit. Example: Meine Arbeit beginnt um 9 Uhr.', explanation: 'Nouns ending in -heit, -keit, -eit are always feminine → die Arbeit.' },
+    { id: uid(), question: 'Rewrite using V2 word order: Start the sentence with "Jeden Tag": "___ ich Deutsch lerne."', hint: 'The verb must come second. Swap verb and subject.', answer: 'Jeden Tag lerne ich Deutsch.', explanation: 'V2 rule: if "Jeden Tag" is first, the verb "lerne" moves to second position and "ich" moves to third.' },
+    { id: uid(), question: 'Translate to German: "My friend buys a book every day."', hint: 'mein Freund = my friend, kaufen = to buy, ein Buch = a book, jeden Tag = every day', answer: 'Mein Freund kauft jeden Tag ein Buch.', explanation: 'Verb in second position: Mein Freund (1) kauft (2) jeden Tag ein Buch.' },
   ],
 };
 
 function maybeShowOnboarding() {
   if (getSets().length > 0 || localStorage.getItem('ds_welcomed')) return;
+  // Auto-inject sample set so app isn't empty
+  saveSets([SAMPLE_STUDY_SET]);
   document.getElementById('onboarding-overlay')?.classList.remove('hidden');
 }
 
 function dismissOnboarding() {
   localStorage.setItem('ds_welcomed', '1');
   document.getElementById('onboarding-overlay')?.classList.add('hidden');
-  // Add sample set only if still none
-  if (getSets().length === 0) {
-    saveSets([SAMPLE_STUDY_SET]);
-    showView('dashboard');
+  showView('dashboard');
+}
+
+function startSampleLesson() {
+  // Ensure sample set is present
+  const sets = getSets();
+  if (!sets.find(s => s.id === SAMPLE_STUDY_SET.id)) {
+    saveSets([SAMPLE_STUDY_SET, ...sets]);
   }
+  openStudySet(SAMPLE_STUDY_SET.id);
 }
 
 // ─── PWA Install Prompt ───────────────────────────────────────────────────────

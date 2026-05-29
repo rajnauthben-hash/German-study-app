@@ -6,13 +6,14 @@ CRITICAL RULES:
 - If text is unclear (OCR artifacts), infer the topic and create relevant content
 - Clearly distinguish: content FROM the worksheet vs AI-generated practice material
 - All German nouns MUST have their article (der/die/das)
-- Generate at least 5 vocabulary items, 4 quiz questions, 3 fill-in-blank sentences
+- Generate at least 8 vocabulary items, 5 quiz questions, 4 fill-in-blank sentences, 3 homework questions
 
 Return ONLY this JSON structure:
 
 {
   "title": "Short title like 'Modal Verbs' or 'Sich vorstellen' — max 6 words",
   "topic": "Full description of what this worksheet covers",
+  "level": "A1 or A2 or B1 — estimate based on vocabulary complexity",
   "vocabulary": [
     {
       "german": "German word (WITHOUT article)",
