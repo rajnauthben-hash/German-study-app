@@ -1,5 +1,5 @@
-const CACHE = 'deutschsnap-v2';
-const STATIC = ['/', '/index.html', '/app.js', '/style.css', '/manifest.json'];
+const CACHE = 'deutschsnap-v3';
+const STATIC = ['/app.js', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -17,11 +17,20 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+
+  // Navigation requests (HTML) — network-first so updates appear immediately
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Static assets — cache-first for offline support
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(res => {
       if (res && res.status === 200 && res.type === 'basic') {
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+        caches.open(CACHE).then(c => c.put(e.request, res.clone()));
       }
       return res;
     }))
