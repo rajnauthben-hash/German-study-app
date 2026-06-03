@@ -943,7 +943,10 @@ function renderStudySetView(set) {
   renderVocabTab(set);
   renderGrammarTab(set);
   renderSentencesTab(set);
-  if (isCourseUnit) renderDialogueTab(set);
+  if (isCourseUnit) {
+    renderDialogueTab(set);
+    checkBadgeTrigger('mode_used', { mode: 'dialogue' });
+  }
 }
 
 function switchTab(tab) {
@@ -3996,7 +3999,11 @@ function playAllDialogue(unitId) {
   if (!unit || !unit.dialogue) return;
   let i = 0;
   function playNext() {
-    if (i >= unit.dialogue.length) return;
+    if (i >= unit.dialogue.length) {
+      addXP(15);
+      showToast('+15 XP — dialogue complete!', 'success');
+      return;
+    }
     speakDialogueLine(i, unitId);
     const rate = window._dialogueSlow ? 0.5 : 0.85;
     const words = unit.dialogue[i].text.split(' ').length;
@@ -4013,6 +4020,7 @@ function startListeningExercise(unitId) {
     showToast('No listening exercises for this unit.', 'info');
     return;
   }
+  checkBadgeTrigger('mode_used', { mode: 'listening' });
   state.listening = { unitId, items: [...unit.listeningItems], index: 0, score: 0, answered: false };
   showView('listening');
 }
