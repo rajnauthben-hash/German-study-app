@@ -1,4 +1,4 @@
-const CACHE = 'deutschsnap-v3';
+const CACHE = 'deutschsnap-v4';
 const STATIC = ['/app.js', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
