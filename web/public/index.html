@@ -32,6 +32,9 @@
   <a class="sidebar-link active" id="snav-dashboard" onclick="showView('dashboard');closeSidebar()">
     <span class="sidebar-icon">🏠</span> Dashboard
   </a>
+  <a class="sidebar-link" id="snav-course" onclick="showView('course');closeSidebar()">
+    <span class="sidebar-icon">📖</span> A1 Course
+  </a>
   <a class="sidebar-link" id="snav-create" onclick="showView('create');closeSidebar()">
     <span class="sidebar-icon">📷</span> Scan Worksheet
   </a>
@@ -278,12 +281,14 @@ Du musst lernen. – You must study.
       <button class="tab-btn" data-tab="vocabulary" onclick="switchTab('vocabulary')">Vocabulary</button>
       <button class="tab-btn" data-tab="grammar" onclick="switchTab('grammar')">Grammar</button>
       <button class="tab-btn" data-tab="sentences" onclick="switchTab('sentences')">Sentences</button>
+      <button class="tab-btn" data-tab="dialogue" onclick="switchTab('dialogue')" id="tab-btn-dialogue" style="display:none">💬 Dialogue</button>
     </div>
 
     <div class="tab-panel active" id="tab-overview"></div>
     <div class="tab-panel" id="tab-vocabulary"></div>
     <div class="tab-panel" id="tab-grammar"></div>
     <div class="tab-panel" id="tab-sentences"></div>
+    <div class="tab-panel" id="tab-dialogue"></div>
   </div>
 
   <!-- ── FLASHCARDS ─────────────────────────────────────────── -->
@@ -841,6 +846,29 @@ Du musst lernen. – You must study.
   </div>
 </div>
 
+  <!-- ── COURSE MAP ──────────────────────────────────────────── -->
+  <div class="view" id="view-course">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">🇩🇪 German A1 Course</h1>
+        <p class="page-sub">Your structured path from zero to conversational German.</p>
+      </div>
+    </div>
+    <div id="course-overall-progress" style="margin-bottom:20px"></div>
+    <div id="course-units-container"></div>
+  </div>
+
+  <!-- ── LISTENING EXERCISE ────────────────────────────────────── -->
+  <div class="view" id="view-listening">
+    <div class="study-topbar">
+      <button class="back-btn" onclick="backToStudySet()">← Back</button>
+      <div class="study-topbar-info">
+        <div class="study-set-title">🎧 Listening Exercise</div>
+      </div>
+    </div>
+    <div id="listening-active"></div>
+  </div>
+
 <!-- ── PWA Install Banner ───────────────────────────────────── -->
 <div class="install-banner hidden" id="install-banner">
   <span class="install-banner-text">📱 Add DeutschSnap to your home screen</span>
@@ -854,9 +882,9 @@ Du musst lernen. – You must study.
     <span class="bnav-icon">🏠</span>
     <span class="bnav-label">Home</span>
   </button>
-  <button class="bnav-btn" id="bnav-create" onclick="showView('create')" aria-label="Scan">
-    <span class="bnav-icon">📷</span>
-    <span class="bnav-label">Scan</span>
+  <button class="bnav-btn" id="bnav-course" onclick="showView('course')" aria-label="Course">
+    <span class="bnav-icon">📖</span>
+    <span class="bnav-label">Course</span>
   </button>
   <button class="bnav-btn" id="bnav-saved-sets" onclick="showView('saved-sets')" aria-label="Study">
     <span class="bnav-icon">📚</span>

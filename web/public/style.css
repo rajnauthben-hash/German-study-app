@@ -1868,4 +1868,63 @@ body.dark .hw-hint-area { background: rgba(255,211,61,0.08); border-color: rgba(
   border-top: 1px solid rgba(0,0,0,0.08);
 }
 
+/* ── Course Map ─────────────────────────────────────────────── */
+.course-unit-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  gap: 12px;
+}
+.course-unit-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.unit-locked { opacity: 0.5; cursor: not-allowed; }
+.unit-locked:hover { transform: none; box-shadow: none; }
+.unit-complete { border-left: 4px solid var(--success); }
+.unit-card-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.unit-emoji { font-size: 28px; flex-shrink: 0; }
+.unit-card-info { flex: 1; min-width: 0; }
+.unit-card-title { font-weight: 700; font-size: 15px; color: var(--text); margin-bottom: 2px; }
+.unit-card-desc { font-size: 12px; color: var(--text-light); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unit-card-meta { display: flex; align-items: center; gap: 6px; }
+.unit-status-icon { font-size: 13px; }
+.unit-card-right { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; }
+.unit-mastery-pct { font-size: 13px; font-weight: 700; color: var(--text-light); }
+.unit-progress-mini { width: 48px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.unit-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+/* ── Dialogue Player ─────────────────────────────────────────── */
+.dialogue-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.dialogue-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.dialogue-bubble { max-width: 85%; padding: 10px 14px; border-radius: 16px; position: relative; transition: background 0.3s; }
+.bubble-a { align-self: flex-start; background: var(--primary-light, #EEF0FF); border-bottom-left-radius: 4px; }
+.bubble-b { align-self: flex-end; background: var(--card); border: 1px solid var(--border); border-bottom-right-radius: 4px; }
+.bubble-speaker { font-size: 11px; font-weight: 700; color: var(--primary); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+.bubble-text { font-size: 15px; color: var(--text); display: flex; align-items: flex-start; gap: 6px; }
+.bubble-speak-btn { background: none; border: none; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 0; flex-shrink: 0; margin-top: 1px; }
+.bubble-speak-btn:hover { opacity: 1; }
+.bubble-translation { font-size: 12px; color: var(--text-light); margin-top: 4px; font-style: italic; }
+.bubble-translation.hidden { display: none; }
+.dialogue-active { background: var(--primary-light, #EEF0FF) !important; }
+.cultural-note-card { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--warning); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; font-size: 14px; color: var(--text); }
+.cultural-icon { font-size: 20px; flex-shrink: 0; }
+body.dark .bubble-a { background: rgba(91,103,248,0.15); }
+
+/* ── Listening Exercise ──────────────────────────────────────── */
+.listening-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px 20px; margin-bottom: 16px; }
+.listening-play-area { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+.listening-play-btn { font-size: 18px; padding: 14px 28px; background: var(--primary); color: #fff; border: none; border-radius: 50px; cursor: pointer; font-weight: 700; }
+.listening-slow-btn { font-size: 14px; padding: 10px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 50px; cursor: pointer; color: var(--text); }
+.listening-question { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 16px; color: var(--text); }
+.listening-options { display: flex; flex-direction: column; gap: 8px; }
+.listening-feedback { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
+.feedback-correct { color: var(--success); font-weight: 700; }
+.feedback-incorrect { color: var(--error); font-weight: 600; }
+.listening-header { margin-bottom: 16px; }
+
 
