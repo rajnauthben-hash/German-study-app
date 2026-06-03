@@ -70,6 +70,9 @@ let state = {
 
   // Homework helper
   hw: { items: [], index: 0, correct: 0, answered: false, setId: null, revealed: false },
+
+  // Listening exercise
+  listening: null,
 };
 
 // ─── Storage Helpers ──────────────────────────────────────────────────────────
